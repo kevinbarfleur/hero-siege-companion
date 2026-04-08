@@ -584,6 +584,23 @@ body {
   text-align: right;
 }
 
+/* Placeholder state */
+.pill-sz__zone--dim {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+.pill-sz__waiting-text {
+  display: block;
+  font-family: "Crimson Text", serif;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 2px;
+}
+.pill-stat__value--dim {
+  color: var(--color-text-muted);
+}
+
 /* App collapse/expand transitions */
 #app.app--hidden {
   display: none !important;

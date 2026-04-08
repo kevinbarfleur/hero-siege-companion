@@ -1899,10 +1899,22 @@ async function updatePillStats() {
     const newHtml = renderPillStatsHTML(data);
 
     if (!newHtml) {
-      // Pinned but no data yet → show logo as fallback
-      if (icon) icon.style.display = '';
-      container.innerHTML = '';
-      if (pillContent) pillContent.classList.add('pill-content--logo-only');
+      // Pinned but no data yet → show placeholders
+      if (icon) icon.style.display = 'none';
+      if (pillContent) pillContent.classList.remove('pill-content--logo-only');
+      let placeholderHtml = '';
+      for (const key of pinnedStats) {
+        const meta = STAT_LABELS[key];
+        if (!meta) continue;
+        if (key === 'satanic_zone') {
+          placeholderHtml += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span></div>`;
+        } else {
+          placeholderHtml += `<div class="pill-stat"><span class="pill-stat__icon">${meta.icon}</span><span class="pill-stat__label">${meta.name}</span><span class="pill-stat__value pill-stat__value--dim">-</span></div>`;
+        }
+      }
+      container.innerHTML = placeholderHtml;
+      // Resize for placeholders
+      window.pywebview.api.collapse_to_pill(pinnedStats);
       return;
     }
 
