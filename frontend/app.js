@@ -227,19 +227,13 @@ function showConfirm(message) {
 
 // ─── All tab — quest cards with "+" button ───
 
-function createAllQuestCard(quest, questlineName, allQuestsInLine) {
+function createAllQuestCard(quest, questlineName) {
   const card = document.createElement('div');
   card.className = 'quest-step quest-step--current';
 
-  const preset = getActivePreset();
-  const pinned = preset && isQuestInPreset(preset, questlineName, quest.name);
-
   let html = `<div class="quest-step__header">`;
   html += `<div class="quest-step__name">${quest.name}</div>`;
-  const pinSvg = pinned
-    ? `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l2 3h3l-1 3 1 3H10l-2 3-2-3H3l1-3-1-3h3z"/></svg>`
-    : `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>`;
-  html += `<button class="quest-pin-btn${pinned ? ' quest-pin-btn--pinned' : ''}" data-tip="${pinned ? 'Already pinned' : 'Pin quest'}" data-tip-pos="left">${pinSvg}</button></div>`;
+  html += `</div>`;
 
   if (quest.description) {
     let desc = cleanDescription(quest.description);
@@ -255,286 +249,19 @@ function createAllQuestCard(quest, questlineName, allQuestsInLine) {
   }
 
   card.innerHTML = html;
-
-  if (!pinned) {
-    card.querySelector('.quest-pin-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      showAddPopup(quest, questlineName, allQuestsInLine);
-    });
-  }
-
   return card;
 }
 
-// ─── TipTap editor helper ───
 
-let activeEditors = []; // track for cleanup
+// ─── Guide tab rendering ───
 
-function createNoteEditor(container, content, placeholder) {
-  if (window.TipTap) {
-    const wrap = document.createElement('div');
-    wrap.className = 'tiptap-wrap';
-
-    const toolbar = document.createElement('div');
-    toolbar.className = 'tiptap-toolbar';
-    toolbar.innerHTML = `
-      <button class="tiptap-toolbar__btn" data-cmd="bold" title="Bold"><b>B</b></button>
-      <button class="tiptap-toolbar__btn" data-cmd="italic" title="Italic"><i>I</i></button>
-      <button class="tiptap-toolbar__btn" data-cmd="underline" title="Underline"><u>U</u></button>
-      <button class="tiptap-toolbar__btn" data-cmd="strike" title="Strikethrough"><s>S</s></button>
-    `;
-
-    const editorDiv = document.createElement('div');
-    editorDiv.className = 'tiptap-editor';
-
-    wrap.appendChild(toolbar);
-    wrap.appendChild(editorDiv);
-    container.appendChild(wrap);
-
-    const editor = new window.TipTap.Editor({
-      element: editorDiv,
-      extensions: [
-        window.TipTap.StarterKit,
-        window.TipTap.Placeholder.configure({ placeholder: placeholder || 'Write a note...' }),
-        window.TipTap.Underline,
-      ],
-      content: content || '',
-    });
-
-    // Toolbar buttons
-    toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const cmd = btn.dataset.cmd;
-        if (cmd === 'bold') editor.chain().focus().toggleBold().run();
-        else if (cmd === 'italic') editor.chain().focus().toggleItalic().run();
-        else if (cmd === 'underline') editor.chain().focus().toggleUnderline().run();
-        else if (cmd === 'strike') editor.chain().focus().toggleStrike().run();
-      });
-    });
-
-    // Update toolbar active state
-    editor.on('selectionUpdate', () => {
-      toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
-        const cmd = btn.dataset.cmd;
-        const active = editor.isActive(cmd);
-        btn.classList.toggle('tiptap-toolbar__btn--active', active);
-      });
-    });
-
-    activeEditors.push(editor);
-    return { getHTML: () => editor.getHTML(), destroy: () => editor.destroy(), editor };
-  }
-
-  // Fallback: textarea
-  const textarea = document.createElement('textarea');
-  textarea.className = 'note-textarea';
-  textarea.value = content ? content.replace(/<[^>]+>/g, '') : '';
-  textarea.placeholder = placeholder || 'Write a note...';
-  container.appendChild(textarea);
-  return { getHTML: () => textarea.value, destroy: () => {} };
-}
-
-function cleanupEditors() {
-  activeEditors.forEach(e => { try { e.destroy(); } catch (x) {} });
-  activeEditors = [];
-}
-
-// ─── Add-to-preset popup ───
-
+// closeAddPopup stub — used by closeAllPanels
 function closeAddPopup() {
-  cleanupEditors();
   const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'none';
-  overlay.innerHTML = '';
+  if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
 }
 
-function showAddPopup(quest, questlineName, allQuestsInLine) {
-  const preset = getActivePreset();
-  if (!preset) {
-    showCreatePresetFirst();
-    return;
-  }
-
-  const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAddPopup(); };
-
-  const popup = document.createElement('div');
-  popup.className = 'add-popup';
-  popup.onclick = (e) => e.stopPropagation();
-
-  const multipleQuests = allQuestsInLine.length > 1;
-  let mode = 'single'; // 'single' or 'questline'
-
-  let html = `<div class="add-popup__title">Add to "${preset.name}"</div>`;
-
-  // Mode selection (only if questline has multiple quests)
-  if (multipleQuests) {
-    html += `<div class="add-popup__modes">`;
-    html += `<label class="add-popup__mode add-popup__mode--active" data-mode="single">`;
-    html += `<input type="radio" name="add-mode" value="single" checked>`;
-    html += `<span class="add-popup__mode-label">This quest only</span>`;
-    html += `<span class="add-popup__mode-detail">"${quest.name}"</span>`;
-    html += `</label>`;
-    html += `<label class="add-popup__mode" data-mode="questline">`;
-    html += `<input type="radio" name="add-mode" value="questline">`;
-    html += `<span class="add-popup__mode-label">Entire questline (${allQuestsInLine.length} quests)</span>`;
-    html += `<span class="add-popup__mode-detail">${questlineName}</span>`;
-    html += `</label>`;
-    html += `<div class="add-popup__quest-list" id="add-popup-quest-list" style="display:none;">`;
-    for (const q of allQuestsInLine) {
-      const alreadyIn = isQuestInPreset(preset, questlineName, q.name);
-      html += `<div class="add-popup__quest-item${alreadyIn ? ' add-popup__quest-item--exists' : ''}">`;
-      html += alreadyIn ? `<span class="add-popup__quest-check">${RUNE}</span>` : `<span class="add-popup__quest-check">+</span>`;
-      html += `<span>${q.name}</span>`;
-      if (alreadyIn) html += `<span class="add-popup__exists-tag">already added</span>`;
-      html += `</div>`;
-    }
-    html += `</div>`;
-    html += `</div>`;
-  }
-
-  // Category selector
-  html += `<div class="add-popup__field">`;
-  html += `<label class="add-popup__label">Category</label>`;
-  html += `<select class="add-popup__select" id="add-popup-category">`;
-  for (const cat of preset.categories) {
-    html += `<option value="${cat.id}">${cat.name}</option>`;
-  }
-  html += `<option value="__new__">+ New category...</option>`;
-  html += `</select>`;
-  html += `<input class="add-popup__input" id="add-popup-new-cat" placeholder="Category name..." style="display:none;">`;
-  html += `</div>`;
-
-  // Note field (single mode only) — TipTap editor
-  html += `<div class="add-popup__field" id="add-popup-note-field">`;
-  html += `<label class="add-popup__label">Note (optional)</label>`;
-  html += `<div id="add-popup-note-editor"></div>`;
-  html += `</div>`;
-
-  html += `<div class="add-popup__actions">`;
-  html += `<button class="runic-btn" id="add-popup-cancel">Cancel</button>`;
-  html += `<button class="runic-btn runic-btn--primary" id="add-popup-confirm">${RUNE} Pin</button>`;
-  html += `</div>`;
-
-  popup.innerHTML = html;
-  overlay.innerHTML = '';
-  overlay.appendChild(popup);
-
-  // Event handlers
-  popup.querySelector('#add-popup-cancel').addEventListener('click', closeAddPopup);
-
-  // Category "new" toggle
-  const catSelect = popup.querySelector('#add-popup-category');
-  const newCatInput = popup.querySelector('#add-popup-new-cat');
-  catSelect.addEventListener('change', () => {
-    newCatInput.style.display = catSelect.value === '__new__' ? '' : 'none';
-    if (catSelect.value === '__new__') newCatInput.focus();
-  });
-
-  // Mode toggle
-  if (multipleQuests) {
-    const modes = popup.querySelectorAll('.add-popup__mode');
-    const questList = popup.querySelector('#add-popup-quest-list');
-    const noteField = popup.querySelector('#add-popup-note-field');
-    modes.forEach(m => {
-      m.addEventListener('click', () => {
-        mode = m.dataset.mode;
-        modes.forEach(mm => mm.classList.remove('add-popup__mode--active'));
-        m.classList.add('add-popup__mode--active');
-        questList.style.display = mode === 'questline' ? '' : 'none';
-        noteField.style.display = mode === 'single' ? '' : 'none';
-      });
-    });
-  }
-
-  // Init TipTap note editor
-  const noteContainer = popup.querySelector('#add-popup-note-editor');
-  const noteEditor = createNoteEditor(noteContainer, '', 'Personal note...');
-
-  // Confirm
-  popup.querySelector('#add-popup-confirm').addEventListener('click', async () => {
-    let catId = catSelect.value;
-    if (catId === '__new__') {
-      const name = newCatInput.value.trim();
-      if (!name) { newCatInput.focus(); return; }
-      const newCat = { id: genId(), name, collapsed: false, items: [] };
-      preset.categories.push(newCat);
-      catId = newCat.id;
-    }
-
-    const cat = preset.categories.find(c => c.id === catId);
-    if (!cat) return;
-
-    const noteHtml = noteEditor.getHTML();
-    const note = noteHtml === '<p></p>' ? '' : noteHtml;
-
-    if (mode === 'single') {
-      if (!isQuestInPreset(preset, questlineName, quest.name)) {
-        cat.items.push({
-          id: genId(), type: 'quest',
-          questline: questlineName, quest_name: quest.name,
-          note, done: false,
-        });
-      }
-    } else {
-      for (const q of allQuestsInLine) {
-        if (!isQuestInPreset(preset, questlineName, q.name)) {
-          cat.items.push({
-            id: genId(), type: 'quest',
-            questline: questlineName, quest_name: q.name,
-            note: '', done: false,
-          });
-        }
-      }
-    }
-
-    await savePresets();
-    closeAddPopup();
-    lastDataStr = '';
-    refreshQuests();
-  });
-}
-
-function showCreatePresetFirst() {
-  const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAddPopup(); };
-
-  const popup = document.createElement('div');
-  popup.className = 'add-popup';
-  popup.onclick = (e) => e.stopPropagation();
-  popup.innerHTML = `
-    <div class="add-popup__title">No preset yet</div>
-    <p class="add-popup__text">Create a preset first to start pinning quests.</p>
-    <div class="add-popup__field">
-      <input class="add-popup__input" id="new-preset-name" placeholder="Preset name..." value="My Preset">
-    </div>
-    <div class="add-popup__actions">
-      <button class="runic-btn" id="add-popup-cancel">Cancel</button>
-      <button class="runic-btn runic-btn--primary" id="add-popup-create">${RUNE} Create</button>
-    </div>
-  `;
-  overlay.innerHTML = '';
-  overlay.appendChild(popup);
-
-  popup.querySelector('#add-popup-cancel').addEventListener('click', closeAddPopup);
-  popup.querySelector('#new-preset-name').focus();
-  popup.querySelector('#add-popup-create').addEventListener('click', async () => {
-    const name = popup.querySelector('#new-preset-name').value.trim() || 'My Preset';
-    const id = genId();
-    presetsData.presets.push({
-      id, name, created_at: new Date().toISOString().split('T')[0],
-      categories: [{ id: genId(), name: 'General', collapsed: false, items: [] }],
-    });
-    presetsData.active_preset_id = id;
-    await savePresets();
-    closeAddPopup();
-    lastDataStr = '';
-    refreshQuests();
-  });
-}
+// (editing functions removed — all editing is now in the Editor window)
 
 // ─── Guide tab rendering ───
 
@@ -546,32 +273,40 @@ function renderGuide(list, status) {
       <div class="guide-empty">
         <div class="guide-empty__icon">${RUNE}</div>
         <div class="guide-empty__title">No preset yet</div>
-        <div class="guide-empty__text">Create a preset to organize your quests and track your progress.</div>
-        <button class="runic-btn runic-btn--primary" id="guide-create-btn">${RUNE} Create Preset</button>
+        <div class="guide-empty__text">Open the editor to create a preset and organize your quests.</div>
+        <button class="runic-btn runic-btn--primary" id="guide-open-editor-btn">${RUNE} Open Editor</button>
       </div>`;
     status.textContent = 'no preset';
 
-    list.querySelector('#guide-create-btn').addEventListener('click', () => {
-      showCreatePresetFirst();
+    list.querySelector('#guide-open-editor-btn').addEventListener('click', () => {
+      try { window.pywebview.api.open_editor(); } catch (e) {}
     });
     return;
   }
 
-  // Preset selector
-  let html = `<div class="guide-selector">`;
-  html += `<div class="guide-selector__current" id="guide-selector-trigger">`;
-  html += `<span class="guide-selector__name">${preset.name}</span>`;
-  html += `<svg class="guide-selector__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>`;
+  // Preset selector (runic-select) + edit button (runic-btn)
+  let html = `<div class="guide-preset-bar">`;
+  html += `<div class="runic-select runic-select--guide" id="guide-preset-select">`;
+  html += `<div class="runic-select__trigger" id="guide-selector-trigger">`;
+  html += `<span class="runic-select__rune runic-select__rune--tl">\u25C6</span>`;
+  html += `<span class="runic-select__rune runic-select__rune--tr">\u25C6</span>`;
+  html += `<span class="runic-select__rune runic-select__rune--bl">\u25C6</span>`;
+  html += `<span class="runic-select__rune runic-select__rune--br">\u25C6</span>`;
+  html += `<span class="runic-select__value">${preset.name}</span>`;
+  html += `<svg class="runic-select__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>`;
+  html += `<div class="runic-select__glow"></div>`;
   html += `</div>`;
-  html += `<div class="guide-selector__dropdown" id="guide-selector-dropdown" style="display:none;">`;
+  html += `<div class="runic-select__dropdown" id="guide-selector-dropdown" style="display:none;">`;
   for (const p of presetsData.presets) {
-    html += `<button class="guide-selector__option${p.id === preset.id ? ' guide-selector__option--active' : ''}" data-preset-id="${p.id}">${p.name}</button>`;
+    html += `<button class="runic-select__option${p.id === preset.id ? ' runic-select__option--active' : ''}" data-preset-id="${p.id}">${p.name}</button>`;
   }
-  html += `<div class="guide-selector__divider"></div>`;
-  html += `<button class="guide-selector__option guide-selector__option--manage" id="guide-manage-btn">${RUNE} Manage presets...</button>`;
   html += `</div></div>`;
+  html += `<button class="runic-btn runic-btn--sm" id="guide-edit-btn" data-tip="Edit preset" data-tip-pos="left">`;
+  html += `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;margin-right:4px"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>Edit`;
+  html += `</button>`;
+  html += `</div>`;
 
-  // Categories
+  // Categories (read-only — no editing buttons)
   let totalItems = 0;
   let totalDone = 0;
 
@@ -595,10 +330,12 @@ function renderGuide(list, status) {
 
     html += `<div class="guide-cat${collapsed ? '' : ' guide-cat--expanded'}" data-cat-index="${ci}">`;
     html += `<div class="guide-cat__header" data-cat-toggle="${ci}">`;
+    html += `<span class="guide-cat__rune guide-cat__rune--tl">\u25C6</span>`;
+    html += `<span class="guide-cat__rune guide-cat__rune--tr">\u25C6</span>`;
     html += `<span class="guide-cat__arrow">${collapsed ? '\u25B6' : '\u25BC'}</span>`;
     html += `<span class="guide-cat__name">${cat.name}</span>`;
     html += `<span class="guide-cat__count">${done}/${total}</span>`;
-    html += `<button class="guide-cat__menu" data-cat-menu="${ci}" data-tip="Options" data-tip-pos="left"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></button>`;
+    html += `<div class="guide-cat__glow"></div>`;
     html += `</div>`;
     html += `<div class="guide-cat__progress"><div class="guide-cat__progress-bar" style="width:${pct}%"></div></div>`;
 
@@ -608,65 +345,77 @@ function renderGuide(list, status) {
       for (let ii = 0; ii < itemsToRender.length; ii++) {
         const item = itemsToRender[ii];
         const realIndex = searchTerm ? cat.items.indexOf(item) : ii;
-        html += renderGuideItem(item, ci, realIndex, cat.items.length);
+        html += renderGuideItem(item, ci, realIndex);
       }
-      html += `<button class="runic-btn runic-btn--ghost runic-btn--sm runic-btn--block" data-add-note="${ci}">+ Add note</button>`;
       html += `</div>`;
     }
     html += `</div>`;
   }
 
-  html += `<div style="padding:6px 10px;"><button class="runic-btn runic-btn--ghost runic-btn--block" id="guide-add-cat">+ Add Category</button></div>`;
-
   status.textContent = `${totalDone}/${totalItems} completed`;
   list.innerHTML = html;
 
-  // Event listeners
   initGuideListeners(list);
 }
 
-function renderGuideItem(item, catIndex, itemIndex, totalItems) {
+function renderGuideItem(item, catIndex, itemIndex) {
   const isQuest = item.type === 'quest';
-  let html = `<div class="guide-item${item.done ? ' guide-item--done' : ''}" data-cat="${catIndex}" data-item="${itemIndex}">`;
+  const isCollapsed = item.done || item.hidden;
 
-  const svgDots = '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>';
-
-  html += `<div class="guide-item__bar">`;
-  html += `<label class="guide-item__check"><input type="checkbox" ${item.done ? 'checked' : ''} data-toggle-done="${catIndex},${itemIndex}"><span class="guide-item__checkbox"></span></label>`;
-  html += `<button class="guide-item__menu" data-item-menu="${catIndex},${itemIndex},${totalItems}" data-tip="Actions" data-tip-pos="left">${svgDots}</button>`;
-  html += `</div>`;
+  let html = `<div class="guide-item${item.done ? ' guide-item--done' : ''}${isCollapsed ? ' guide-item--collapsed' : ''}" data-cat="${catIndex}" data-item="${itemIndex}">`;
 
   if (isQuest) {
-    // Full quest card — same view as All tab
     const webQuest = findWebQuest(item.questline, item.quest_name);
-    html += `<div class="quest-step quest-step--current">`;
+
+    // Header row: questline + name + checkbox
+    html += `<div class="guide-item__header">`;
+    html += `<div class="guide-item__header-text">`;
     html += `<div class="quest-step__questline">${item.questline}</div>`;
     html += `<div class="quest-step__name">${item.quest_name}</div>`;
-
-    if (webQuest) {
-      if (webQuest.description) {
-        let desc = cleanDescription(webQuest.description);
-        if (desc.length > 200) desc = desc.substring(0, 200) + '...';
-        html += `<div class="quest-step__desc">${desc}</div>`;
-      }
-      html += createLocationBadges(webQuest.locations);
-      for (const obj of webQuest.objectives) {
-        const icon = getObjectiveIcon(obj.label);
-        html += `<div class="quest-objective"><span class="quest-objective__icon">${icon}</span><span class="quest-objective__text">${obj.label}</span></div>`;
-      }
-    }
-
-    // User note (rich HTML)
-    if (item.note && item.note !== '<p></p>') {
-      html += `<div class="guide-item__note-rich">${item.note}</div>`;
-    }
     html += `</div>`;
+    html += `<label class="guide-item__check"><input type="checkbox" ${item.done ? 'checked' : ''} data-toggle-done="${catIndex},${itemIndex}"><span class="guide-item__checkbox"></span></label>`;
+    html += `</div>`;
+
+    // Body (hidden when done)
+    if (!item.done) {
+      html += `<div class="guide-item__body">`;
+      if (webQuest) {
+        if (webQuest.description) {
+          let desc = cleanDescription(webQuest.description);
+          if (desc.length > 200) desc = desc.substring(0, 200) + '...';
+          html += `<div class="quest-step__desc">${desc}</div>`;
+        }
+        html += createLocationBadges(webQuest.locations);
+        for (const obj of webQuest.objectives) {
+          const icon = getObjectiveIcon(obj.label);
+          html += `<div class="quest-objective"><span class="quest-objective__icon">${icon}</span><span class="quest-objective__text">${obj.label}</span></div>`;
+        }
+      }
+      if (item.note && item.note !== '<p></p>') {
+        html += `<div class="guide-item__note-rich">${item.note}</div>`;
+      }
+      html += `</div>`;
+    }
   } else {
-    // Note card — same card style
-    html += `<div class="quest-step quest-step--current pinned-note-card">`;
-    if (item.title) html += `<div class="quest-step__name">${item.title}</div>`;
-    if (item.text && item.text !== '<p></p>') html += `<div class="guide-item__note-rich">${item.text}</div>`;
+    // Note card — header with title + eye toggle
+    const hasContent = item.text && item.text !== '<p></p>';
+    const eyeOpen = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>`;
+    const eyeClosed = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><line x1="2" y1="2" x2="14" y2="14"/></svg>`;
+
+    html += `<div class="guide-item__header">`;
+    html += `<div class="guide-item__header-text">`;
+    html += `<div class="quest-step__name">${item.title || 'Note'}</div>`;
     html += `</div>`;
+    if (hasContent) {
+      html += `<button class="guide-item__eye" data-toggle-hidden="${catIndex},${itemIndex}">${item.hidden ? eyeClosed : eyeOpen}</button>`;
+    }
+    html += `</div>`;
+
+    if (!item.hidden && hasContent) {
+      html += `<div class="guide-item__body">`;
+      html += `<div class="guide-item__note-rich">${item.text}</div>`;
+      html += `</div>`;
+    }
   }
 
   html += `</div>`;
@@ -677,13 +426,16 @@ function initGuideListeners(list) {
   const preset = getActivePreset();
   if (!preset) return;
 
-  // Preset selector
+  // Preset selector (runic-select)
+  const selectWrap = list.querySelector('#guide-preset-select');
   const trigger = list.querySelector('#guide-selector-trigger');
   const dropdown = list.querySelector('#guide-selector-dropdown');
   if (trigger && dropdown) {
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
+      const isOpen = dropdown.style.display !== 'none';
+      dropdown.style.display = isOpen ? 'none' : '';
+      if (selectWrap) selectWrap.classList.toggle('runic-select--open', !isOpen);
     });
     dropdown.querySelectorAll('[data-preset-id]').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -691,23 +443,29 @@ function initGuideListeners(list) {
         presetsData.active_preset_id = btn.dataset.presetId;
         await savePresets();
         dropdown.style.display = 'none';
+        if (selectWrap) selectWrap.classList.remove('runic-select--open');
         lastDataStr = '';
         refreshQuests();
       });
     });
-    const manageBtn = list.querySelector('#guide-manage-btn');
-    if (manageBtn) manageBtn.addEventListener('click', (e) => {
+    document.addEventListener('click', () => {
+      if (dropdown) dropdown.style.display = 'none';
+      if (selectWrap) selectWrap.classList.remove('runic-select--open');
+    }, { once: true });
+  }
+
+  // Edit button — opens editor window
+  const editBtn = list.querySelector('#guide-edit-btn');
+  if (editBtn) {
+    editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      dropdown.style.display = 'none';
-      showPresetManager();
+      try { window.pywebview.api.open_editor(); } catch (e) {}
     });
-    document.addEventListener('click', () => { if (dropdown) dropdown.style.display = 'none'; }, { once: true });
   }
 
   // Category toggle (collapse/expand)
   list.querySelectorAll('[data-cat-toggle]').forEach(el => {
     el.addEventListener('click', async (e) => {
-      if (e.target.closest('[data-cat-menu]')) return;
       const ci = parseInt(el.dataset.catToggle);
       preset.categories[ci].collapsed = !preset.categories[ci].collapsed;
       await savePresets();
@@ -716,15 +474,7 @@ function initGuideListeners(list) {
     });
   });
 
-  // Category menu
-  list.querySelectorAll('[data-cat-menu]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showCategoryMenu(parseInt(btn.dataset.catMenu), btn);
-    });
-  });
-
-  // Toggle done
+  // Toggle done (quests)
   list.querySelectorAll('[data-toggle-done]').forEach(input => {
     input.addEventListener('change', async () => {
       const [ci, ii] = input.dataset.toggleDone.split(',').map(Number);
@@ -735,406 +485,19 @@ function initGuideListeners(list) {
     });
   });
 
-  // Item context menu (···)
-  list.querySelectorAll('[data-item-menu]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const [ci, ii, total] = btn.dataset.itemMenu.split(',').map(Number);
-      showItemMenu(ci, ii, total, btn);
-    });
-  });
-
-  // Add note (bottom of category)
-  list.querySelectorAll('[data-add-note]').forEach(btn => {
+  // Toggle hidden (notes)
+  list.querySelectorAll('[data-toggle-hidden]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const ci = parseInt(btn.dataset.addNote);
-      showAddNotePopup(ci);
+      const [ci, ii] = btn.dataset.toggleHidden.split(',').map(Number);
+      preset.categories[ci].items[ii].hidden = !preset.categories[ci].items[ii].hidden;
+      await savePresets();
+      lastDataStr = '';
+      refreshQuests();
     });
   });
-
-  // Add category
-  const addCatBtn = list.querySelector('#guide-add-cat');
-  if (addCatBtn) {
-    addCatBtn.addEventListener('click', () => showAddCategoryPopup());
-  }
 }
 
-// ─── Category menu ───
-
-function showCategoryMenu(catIndex, anchorEl) {
-  // Remove existing menu
-  document.querySelectorAll('.cat-menu').forEach(m => m.remove());
-
-  const preset = getActivePreset();
-  if (!preset) return;
-
-  const menu = document.createElement('div');
-  menu.className = 'cat-menu';
-
-  const items = [
-    { label: 'Rename', action: () => showRenameCategoryPopup(catIndex) },
-    { label: 'Move up', action: async () => {
-      if (catIndex > 0) {
-        [preset.categories[catIndex - 1], preset.categories[catIndex]] = [preset.categories[catIndex], preset.categories[catIndex - 1]];
-        await savePresets(); lastDataStr = ''; refreshQuests();
-      }
-    }, disabled: catIndex === 0 },
-    { label: 'Move down', action: async () => {
-      if (catIndex < preset.categories.length - 1) {
-        [preset.categories[catIndex], preset.categories[catIndex + 1]] = [preset.categories[catIndex + 1], preset.categories[catIndex]];
-        await savePresets(); lastDataStr = ''; refreshQuests();
-      }
-    }, disabled: catIndex >= preset.categories.length - 1 },
-    { label: 'Delete', action: async () => {
-      if (preset.categories[catIndex].items.length > 0) {
-        const ok = await showConfirm(`Delete "${preset.categories[catIndex].name}" and its ${preset.categories[catIndex].items.length} items?`);
-        if (!ok) return;
-      }
-      preset.categories.splice(catIndex, 1);
-      await savePresets(); lastDataStr = ''; refreshQuests();
-    }, danger: true },
-  ];
-
-  for (const item of items) {
-    const btn = document.createElement('button');
-    btn.className = 'cat-menu__item' + (item.danger ? ' cat-menu__item--danger' : '') + (item.disabled ? ' cat-menu__item--disabled' : '');
-    btn.textContent = item.label;
-    if (!item.disabled) btn.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); item.action(); });
-    menu.appendChild(btn);
-  }
-
-  const rect = anchorEl.getBoundingClientRect();
-  menu.style.top = rect.bottom + 'px';
-  menu.style.right = (window.innerWidth - rect.right) + 'px';
-  document.body.appendChild(menu);
-
-  setTimeout(() => {
-    document.addEventListener('click', function handler() {
-      menu.remove();
-      document.removeEventListener('click', handler);
-    });
-  }, 0);
-}
-
-// ─── Item context menu ───
-
-function showItemMenu(catIndex, itemIndex, totalItems, anchorEl) {
-  document.querySelectorAll('.cat-menu').forEach(m => m.remove());
-
-  const preset = getActivePreset();
-  if (!preset) return;
-
-  const menu = document.createElement('div');
-  menu.className = 'cat-menu';
-
-  // SVG icons for menu items
-  const icoNoteUp = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h10M8 4v5"/><path d="M5.5 6.5L8 4l2.5 2.5"/></svg>';
-  const icoNoteDown = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7h10M8 12V7"/><path d="M5.5 9.5L8 12l2.5-2.5"/></svg>';
-  const icoUp = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l4-4 4 4"/></svg>';
-  const icoDown = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>';
-  const icoRemove = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
-
-  const actions = [
-    { label: 'Add note above', icon: icoNoteUp, action: () => showAddNotePopup(catIndex, itemIndex) },
-    { label: 'Add note below', icon: icoNoteDown, action: () => showAddNotePopup(catIndex, itemIndex + 1) },
-    { separator: true },
-    { label: 'Move up', icon: icoUp, action: async () => {
-      const items = preset.categories[catIndex].items;
-      if (itemIndex > 0) { [items[itemIndex - 1], items[itemIndex]] = [items[itemIndex], items[itemIndex - 1]]; }
-      await savePresets(); lastDataStr = ''; refreshQuests();
-    }, disabled: itemIndex === 0 },
-    { label: 'Move down', icon: icoDown, action: async () => {
-      const items = preset.categories[catIndex].items;
-      if (itemIndex < items.length - 1) { [items[itemIndex], items[itemIndex + 1]] = [items[itemIndex + 1], items[itemIndex]]; }
-      await savePresets(); lastDataStr = ''; refreshQuests();
-    }, disabled: itemIndex >= totalItems - 1 },
-    { separator: true },
-    { label: 'Remove', icon: icoRemove, action: async () => {
-      preset.categories[catIndex].items.splice(itemIndex, 1);
-      await savePresets(); lastDataStr = ''; refreshQuests();
-    }, danger: true },
-  ];
-
-  for (const item of actions) {
-    if (item.separator) {
-      const sep = document.createElement('div');
-      sep.className = 'cat-menu__separator';
-      menu.appendChild(sep);
-      continue;
-    }
-    const btn = document.createElement('button');
-    btn.className = 'cat-menu__item' + (item.danger ? ' cat-menu__item--danger' : '') + (item.disabled ? ' cat-menu__item--disabled' : '');
-    btn.innerHTML = `<span class="cat-menu__icon">${item.icon || ''}</span>${item.label}`;
-    if (!item.disabled) btn.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); item.action(); });
-    menu.appendChild(btn);
-  }
-
-  const rect = anchorEl.getBoundingClientRect();
-  menu.style.top = rect.bottom + 'px';
-  menu.style.right = (window.innerWidth - rect.right) + 'px';
-  document.body.appendChild(menu);
-
-  setTimeout(() => {
-    document.addEventListener('click', function handler() {
-      menu.remove();
-      document.removeEventListener('click', handler);
-    });
-  }, 0);
-}
-
-// ─── Small popups for add note, rename, add category ───
-
-function showSmallPopup(title, placeholder, onConfirm, defaultValue = '') {
-  const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAddPopup(); };
-
-  const popup = document.createElement('div');
-  popup.className = 'add-popup add-popup--small';
-  popup.onclick = (e) => e.stopPropagation();
-  popup.innerHTML = `
-    <div class="add-popup__title">${title}</div>
-    <div class="add-popup__field">
-      <input class="add-popup__input" id="small-popup-input" placeholder="${placeholder}" value="${defaultValue}">
-    </div>
-    <div class="add-popup__actions">
-      <button class="runic-btn" id="small-popup-cancel">Cancel</button>
-      <button class="runic-btn runic-btn--primary" id="small-popup-confirm">OK</button>
-    </div>
-  `;
-  overlay.innerHTML = '';
-  overlay.appendChild(popup);
-
-  const input = popup.querySelector('#small-popup-input');
-  input.focus();
-  input.select();
-
-  popup.querySelector('#small-popup-cancel').addEventListener('click', closeAddPopup);
-  popup.querySelector('#small-popup-confirm').addEventListener('click', () => {
-    const val = input.value.trim();
-    if (val) { onConfirm(val); closeAddPopup(); }
-  });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const val = input.value.trim();
-      if (val) { onConfirm(val); closeAddPopup(); }
-    }
-  });
-}
-
-function showAddNotePopup(catIndex, insertAt) {
-  const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAddPopup(); };
-
-  const popup = document.createElement('div');
-  popup.className = 'add-popup';
-  popup.onclick = (e) => e.stopPropagation();
-  popup.innerHTML = `
-    <div class="add-popup__title">Add note</div>
-    <div class="add-popup__field">
-      <label class="add-popup__label">Title (optional)</label>
-      <input class="add-popup__input" id="note-title-input" placeholder="Note title...">
-    </div>
-    <div class="add-popup__field">
-      <label class="add-popup__label">Content</label>
-      <div id="note-editor-container"></div>
-    </div>
-    <div class="add-popup__actions">
-      <button class="runic-btn" id="note-popup-cancel">Cancel</button>
-      <button class="runic-btn runic-btn--primary" id="note-popup-confirm">${RUNE} Add</button>
-    </div>
-  `;
-  overlay.innerHTML = '';
-  overlay.appendChild(popup);
-
-  const editorContainer = popup.querySelector('#note-editor-container');
-  const noteEditor = createNoteEditor(editorContainer, '', 'Type your note...');
-
-  popup.querySelector('#note-popup-cancel').addEventListener('click', closeAddPopup);
-  popup.querySelector('#note-popup-confirm').addEventListener('click', async () => {
-    const title = popup.querySelector('#note-title-input').value.trim();
-    const html = noteEditor.getHTML();
-    const text = html === '<p></p>' ? '' : html;
-    if (!text && !title) return;
-    const preset = getActivePreset();
-    if (!preset) return;
-    const newNote = { id: genId(), type: 'note', title, text, done: false };
-    if (insertAt != null && insertAt >= 0) {
-      preset.categories[catIndex].items.splice(insertAt, 0, newNote);
-    } else {
-      preset.categories[catIndex].items.push(newNote);
-    }
-    await savePresets();
-    closeAddPopup();
-    lastDataStr = '';
-    refreshQuests();
-  });
-}
-
-function showAddCategoryPopup() {
-  showSmallPopup('New category', 'Category name...', async (name) => {
-    const preset = getActivePreset();
-    if (!preset) return;
-    preset.categories.push({ id: genId(), name, collapsed: false, items: [] });
-    await savePresets();
-    lastDataStr = '';
-    refreshQuests();
-  });
-}
-
-function showRenameCategoryPopup(catIndex) {
-  const preset = getActivePreset();
-  if (!preset) return;
-  showSmallPopup('Rename category', 'Category name...', async (name) => {
-    preset.categories[catIndex].name = name;
-    await savePresets();
-    lastDataStr = '';
-    refreshQuests();
-  }, preset.categories[catIndex].name);
-}
-
-// ─── Preset management panel ───
-
-function showPresetManager() {
-  const overlay = document.getElementById('add-popup-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAddPopup(); };
-
-  const popup = document.createElement('div');
-  popup.className = 'add-popup add-popup--wide';
-  popup.onclick = (e) => e.stopPropagation();
-
-  function render() {
-    let html = `<div class="add-popup__title">Manage Presets</div>`;
-    html += `<div class="preset-list">`;
-
-    if (presetsData.presets.length === 0) {
-      html += `<div class="preset-list__empty">No presets yet</div>`;
-    }
-
-    for (const p of presetsData.presets) {
-      const isActive = p.id === presetsData.active_preset_id;
-      const itemCount = p.categories.reduce((sum, c) => sum + c.items.length, 0);
-      html += `<div class="preset-row${isActive ? ' preset-row--active' : ''}">`;
-      html += `<div class="preset-row__info">`;
-      html += `<div class="preset-row__name">${p.name}${isActive ? ' <span class="preset-row__badge">active</span>' : ''}</div>`;
-      html += `<div class="preset-row__meta">${p.categories.length} categories, ${itemCount} items</div>`;
-      html += `</div>`;
-      html += `<div class="preset-row__actions">`;
-      if (!isActive) html += `<button class="runic-btn runic-btn--sm" data-pm-activate="${p.id}" title="Activate">Use</button>`;
-      html += `<button class="runic-btn runic-btn--sm" data-pm-rename="${p.id}" title="Rename">Rename</button>`;
-      html += `<button class="runic-btn runic-btn--sm" data-pm-duplicate="${p.id}" title="Duplicate">Copy</button>`;
-      html += `<button class="runic-btn runic-btn--sm" data-pm-export="${p.id}" title="Export">Export</button>`;
-      html += `<button class="runic-btn runic-btn--sm runic-btn--danger" data-pm-delete="${p.id}" title="Delete">\u00D7</button>`;
-      html += `</div></div>`;
-    }
-
-    html += `</div>`;
-    html += `<div class="add-popup__actions">`;
-    html += `<button class="runic-btn runic-btn--primary" id="pm-new">${RUNE} New Preset</button>`;
-    html += `<button class="runic-btn" id="pm-import">Import</button>`;
-    html += `<button class="runic-btn" id="pm-close">Close</button>`;
-    html += `</div>`;
-
-    popup.innerHTML = html;
-    attachPmListeners();
-  }
-
-  function attachPmListeners() {
-    popup.querySelectorAll('[data-pm-activate]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        presetsData.active_preset_id = btn.dataset.pmActivate;
-        await savePresets(); render(); lastDataStr = ''; refreshQuests();
-      });
-    });
-
-    popup.querySelectorAll('[data-pm-rename]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const p = presetsData.presets.find(x => x.id === btn.dataset.pmRename);
-        if (!p) return;
-        closeAddPopup();
-        showSmallPopup('Rename preset', 'Preset name...', async (name) => {
-          p.name = name;
-          await savePresets();
-          lastDataStr = '';
-          refreshQuests();
-        }, p.name);
-      });
-    });
-
-    popup.querySelectorAll('[data-pm-duplicate]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const p = presetsData.presets.find(x => x.id === btn.dataset.pmDuplicate);
-        if (!p) return;
-        const copy = JSON.parse(JSON.stringify(p));
-        copy.id = genId();
-        copy.name = p.name + ' (copy)';
-        copy.categories.forEach(c => { c.id = genId(); c.items.forEach(i => { i.id = genId(); }); });
-        presetsData.presets.push(copy);
-        await savePresets(); render();
-      });
-    });
-
-    popup.querySelectorAll('[data-pm-export]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await window.pywebview.api.export_preset(btn.dataset.pmExport);
-      });
-    });
-
-    popup.querySelectorAll('[data-pm-delete]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const p = presetsData.presets.find(x => x.id === btn.dataset.pmDelete);
-        if (!p) return;
-        const ok = await showConfirm(`Delete preset "${p.name}"?`);
-        if (!ok) return;
-        presetsData.presets = presetsData.presets.filter(x => x.id !== p.id);
-        if (presetsData.active_preset_id === p.id) {
-          presetsData.active_preset_id = presetsData.presets.length > 0 ? presetsData.presets[0].id : null;
-        }
-        await savePresets(); render(); lastDataStr = ''; refreshQuests();
-      });
-    });
-
-    popup.querySelector('#pm-new')?.addEventListener('click', () => {
-      closeAddPopup();
-      showSmallPopup('New preset', 'Preset name...', async (name) => {
-        const id = genId();
-        presetsData.presets.push({
-          id, name, created_at: new Date().toISOString().split('T')[0],
-          categories: [{ id: genId(), name: 'General', collapsed: false, items: [] }],
-        });
-        presetsData.active_preset_id = id;
-        await savePresets();
-        lastDataStr = '';
-        refreshQuests();
-      });
-    });
-
-    popup.querySelector('#pm-import')?.addEventListener('click', async () => {
-      const data = await window.pywebview.api.import_preset();
-      if (!data) return;
-      const id = genId();
-      const newPreset = {
-        id, name: data.name || 'Imported Preset',
-        created_at: new Date().toISOString().split('T')[0],
-        categories: (data.categories || []).map(c => ({
-          id: genId(), name: c.name || 'Category', collapsed: false,
-          items: (c.items || []).map(i => ({ ...i, id: genId() })),
-        })),
-      };
-      presetsData.presets.push(newPreset);
-      presetsData.active_preset_id = id;
-      await savePresets(); render(); lastDataStr = ''; refreshQuests();
-    });
-
-    popup.querySelector('#pm-close')?.addEventListener('click', closeAddPopup);
-  }
-
-  overlay.innerHTML = '';
-  overlay.appendChild(popup);
-  render();
-}
+// (Category menu, Item menu, Small popups, Preset manager — all removed, now in Editor window)
 
 // ─── Runeword / Rune rendering ───
 
@@ -1850,9 +1213,10 @@ function renderPillStatsHTML(data) {
           const ico = getBuffIcon(b.name);
           html += `<div class="pill-sz__buff">`;
           html += `<span class="pill-sz__buff-icon">${ico}</span>`;
+          html += `<div class="pill-sz__buff-info">`;
           html += `<span class="pill-sz__buff-name">${b.name}</span>`;
-          html += `<span class="pill-sz__buff-desc">${b.desc || ''}</span>`;
-          html += `</div>`;
+          if (b.desc) html += `<span class="pill-sz__buff-desc">${b.desc}</span>`;
+          html += `</div></div>`;
         }
       }
       html += `</div>`;
@@ -1914,7 +1278,11 @@ async function updatePillStats() {
       }
       container.innerHTML = placeholderHtml;
       // Resize for placeholders
-      window.pywebview.api.collapse_to_pill(pinnedStats);
+      requestAnimationFrame(() => {
+        const h = pillContent.scrollHeight + 4;
+        const w = pillContent.scrollWidth + 22;
+        window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
+      });
       return;
     }
 
@@ -1924,17 +1292,13 @@ async function updatePillStats() {
       if (pillContent) pillContent.classList.remove('pill-content--logo-only');
       container.innerHTML = newHtml;
 
-      // Resize pill to fit visible content
-      const visibleKeys = Object.keys(data).filter(k => {
-        const v = data[k];
-        if (!v) return false;
-        if (k === 'satanic_zone') return !!v.zone;
-        if (k === 'character') return !!v.name;
-        return true;
+      // Resize pill to fit actual rendered content
+      requestAnimationFrame(() => {
+        const h = pillContent.scrollHeight + 4;  // +4 for border
+        const w = pillContent.scrollWidth + 22;   // +22 for padding+border
+        const minW = 270;
+        window.pywebview.api.resize_pill(Math.max(w, minW), Math.max(h, 30));
       });
-      if (visibleKeys.length > 0) {
-        window.pywebview.api.collapse_to_pill(visibleKeys);
-      }
     }
   } catch (e) {}
 }
@@ -2003,10 +1367,8 @@ async function refreshQuests() {
       if (filtered.length === 0) continue;
       shownQuests += filtered.length;
 
-      // Questline section
       const section = document.createElement('div');
       section.className = 'questline-section';
-
       const header = document.createElement('div');
       header.className = 'questline-header';
       header.innerHTML = `<span class="questline-header__arrow">\u25BC</span><span class="questline-header__name">${ql.questline}</span><span class="questline-header__count">${filtered.length} quests</span>`;
@@ -2016,7 +1378,7 @@ async function refreshQuests() {
       const body = document.createElement('div');
       body.className = 'questline-body';
       for (const quest of filtered) {
-        body.appendChild(createAllQuestCard(quest, ql.questline, ql.quests));
+        body.appendChild(createAllQuestCard(quest, ql.questline));
       }
       section.appendChild(body);
       list.appendChild(section);
@@ -2253,24 +1615,54 @@ function closeAllPanels() {
   closeAddPopup();
 }
 
-function collapseToPill() {
+async function collapseToPill() {
   if (isCollapsed) return;
   isCollapsed = true;
   closeAllPanels();
   const app = document.getElementById('app');
   app.classList.add('app--hidden');
 
-  // Always show logo initially — updatePillStats will swap to stats if data available
   const pillIcon = document.getElementById('pill-logo');
   const pillStats = document.getElementById('pill-stats');
   const pillContent = document.getElementById('pill-content');
-  if (pillIcon) pillIcon.style.display = '';
-  if (pillStats) pillStats.innerHTML = '';
-  if (pillContent) pillContent.classList.add('pill-content--logo-only');
+
+  // If stats are pinned, prepare content BEFORE showing pill (no logo flash)
+  if (pinnedStats && pinnedStats.length > 0) {
+    let preHtml = '';
+    try {
+      const data = await window.pywebview.api.get_pill_stats();
+      preHtml = renderPillStatsHTML(data);
+    } catch (e) {}
+
+    if (preHtml) {
+      if (pillIcon) pillIcon.style.display = 'none';
+      if (pillContent) pillContent.classList.remove('pill-content--logo-only');
+      if (pillStats) pillStats.innerHTML = preHtml;
+    } else {
+      // No data yet — show logo
+      if (pillIcon) pillIcon.style.display = '';
+      if (pillStats) pillStats.innerHTML = '';
+      if (pillContent) pillContent.classList.add('pill-content--logo-only');
+    }
+  } else {
+    // No pins — logo only
+    if (pillIcon) pillIcon.style.display = '';
+    if (pillStats) pillStats.innerHTML = '';
+    if (pillContent) pillContent.classList.add('pill-content--logo-only');
+  }
 
   document.getElementById('pill-view').style.display = 'flex';
-  // Always start as 64x64 logo, updatePillStats will resize if needed
-  window.pywebview.api.collapse_to_pill([]);
+
+  // Resize after content is ready
+  if (pinnedStats && pinnedStats.length > 0 && pillStats.innerHTML) {
+    requestAnimationFrame(() => {
+      const h = pillContent.scrollHeight + 4;
+      const w = pillContent.scrollWidth + 22;
+      window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
+    });
+  } else {
+    window.pywebview.api.collapse_to_pill([]);
+  }
 }
 
 function expandFromPill() {
@@ -2298,10 +1690,68 @@ function expandFromPill() {
 
 function initPillMode() {
   document.getElementById('btn-pill').addEventListener('click', collapseToPill);
-  document.getElementById('pill-view').addEventListener('click', expandFromPill);
 
-  document.addEventListener('mouseleave', () => {
+  // Pill interaction: short click = expand, long press = drag
+  const pillView = document.getElementById('pill-view');
+  let pillDragState = null; // { timer, startX, startY, isDragging }
+  const LONG_PRESS_MS = 250;
+  const DRAG_THRESHOLD = 4; // px movement to confirm drag
+
+  pillView.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const sx = e.screenX, sy = e.screenY;
+    pillDragState = { startX: sx, startY: sy, isDragging: false, moved: false };
+    pillDragState.timer = setTimeout(() => {
+      if (pillDragState) {
+        pillDragState.isDragging = true;
+        pillView.style.cursor = 'grabbing';
+      }
+    }, LONG_PRESS_MS);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!pillDragState) return;
+    const dx = e.screenX - pillDragState.startX;
+    const dy = e.screenY - pillDragState.startY;
+    // If moved before long-press timer, start drag immediately
+    if (!pillDragState.isDragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      clearTimeout(pillDragState.timer);
+      pillDragState.isDragging = true;
+      pillView.style.cursor = 'grabbing';
+    }
+    if (pillDragState.isDragging) {
+      pillDragState.moved = true;
+      pillDragState.startX = e.screenX;
+      pillDragState.startY = e.screenY;
+      window.pywebview.api.move_window(dx, dy);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!pillDragState) return;
+    clearTimeout(pillDragState.timer);
+    pillView.style.cursor = '';
+    const wasDragging = pillDragState.isDragging && pillDragState.moved;
+    pillDragState = null;
+    // Only expand if it was a short click (not a drag)
+    if (!wasDragging && isCollapsed) {
+      expandFromPill();
+    }
+  });
+
+  document.addEventListener('mouseleave', async () => {
+    // Cancel any pill drag in progress
+    if (pillDragState) {
+      clearTimeout(pillDragState.timer);
+      pillView.style.cursor = '';
+      pillDragState = null;
+    }
     if (isPillMode && !isCollapsed) {
+      // Don't collapse when the editor window is open
+      try {
+        const editorOpen = await window.pywebview.api.is_editor_open();
+        if (editorOpen) return;
+      } catch (e) {}
       collapseToPill();
     }
   });
@@ -2359,3 +1809,13 @@ window.addEventListener('pywebviewready', async () => {
   refreshQuests();
   updateWebStatus();
 });
+
+// Called by Python via evaluate_js when editor changes presets
+async function reloadPresets() {
+  try {
+    presetsData = await window.pywebview.api.get_presets_data();
+    lastDataStr = '';
+    refreshQuests();
+  } catch (e) {}
+}
+window.reloadPresets = reloadPresets;

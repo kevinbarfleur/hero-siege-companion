@@ -50,6 +50,9 @@ class QuestAPI:
     def __init__(self):
         self._config = _load_config()
         self._presets = _load_presets()
+        self._companion_window = None
+        self._editor_window = None
+        self._frontend_dir = None
         self._web_status = "loading"  # "loading" | "ready" | "cached" | "offline"
         self._web_quests = load_cache("quests") or []
         self._runewords = load_cache("runewords") or []
@@ -150,6 +153,7 @@ class QuestAPI:
         """Save full presets data (frontend handles CRUD logic)."""
         self._presets = data
         _save_presets(data)
+        self._notify_companion()
         return True
 
     def export_preset(self, preset_id):
@@ -182,35 +186,39 @@ class QuestAPI:
             export_data["categories"].append(export_cat)
 
         safe_name = "".join(c for c in preset["name"] if c.isalnum() or c in " -_").strip()
-        for w in webview.windows:
-            result = w.create_file_dialog(
-                webview.SAVE_DIALOG,
-                save_filename=f"{safe_name}.json",
-                file_types=('JSON files (*.json)',)
-            )
-            if result:
-                path = result if isinstance(result, str) else result[0]
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump(export_data, f, indent=2, ensure_ascii=False)
-                return True
+        dialog_win = self._get_dialog_window()
+        if not dialog_win:
+            return False
+        result = dialog_win.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename=f"{safe_name}.json",
+            file_types=('JSON files (*.json)',)
+        )
+        if result:
+            path = result if isinstance(result, str) else result[0]
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            return True
         return False
 
     def import_preset(self):
         """Import a preset from a JSON file via open dialog. Returns the preset data or None."""
-        for w in webview.windows:
-            result = w.create_file_dialog(
-                webview.OPEN_DIALOG,
-                file_types=('JSON files (*.json)',)
-            )
-            if result:
-                path = result[0] if isinstance(result, (list, tuple)) else result
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    if "name" in data and "categories" in data:
-                        return data
-                except (json.JSONDecodeError, OSError, KeyError):
-                    pass
+        dialog_win = self._get_dialog_window()
+        if not dialog_win:
+            return None
+        result = dialog_win.create_file_dialog(
+            webview.OPEN_DIALOG,
+            file_types=('JSON files (*.json)',)
+        )
+        if result:
+            path = result[0] if isinstance(result, (list, tuple)) else result
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if "name" in data and "categories" in data:
+                    return data
+            except (json.JSONDecodeError, OSError, KeyError):
+                pass
         return None
 
     # ─── Live Stats (Sniffer) ───
@@ -379,17 +387,111 @@ class QuestAPI:
 
     # ─── Window Controls ───
 
+    def _get_dialog_window(self):
+        """Return best window to use for file dialogs (prefer editor)."""
+        if self._editor_window and self._editor_window in webview.windows:
+            return self._editor_window
+        if self._companion_window and self._companion_window in webview.windows:
+            return self._companion_window
+        return None
+
+    def _notify_companion(self):
+        """Tell the companion window to reload presets."""
+        try:
+            if self._companion_window and self._companion_window in webview.windows:
+                self._companion_window.evaluate_js('if(window.reloadPresets)reloadPresets()')
+        except Exception:
+            pass
+
     def minimize_window(self):
-        for w in webview.windows:
-            w.minimize()
+        if self._companion_window and self._companion_window in webview.windows:
+            self._companion_window.minimize()
 
     def close_window(self):
-        for w in webview.windows:
-            w.destroy()
+        if self._editor_window and self._editor_window in webview.windows:
+            self._editor_window.destroy()
+        if self._companion_window and self._companion_window in webview.windows:
+            self._companion_window.destroy()
 
     def open_url(self, url):
         import webbrowser
         webbrowser.open(url)
+
+    # ─── Editor Window ───
+
+    def open_editor(self):
+        """Open the preset editor window (or focus it if already open)."""
+        if self._editor_window and self._editor_window in webview.windows:
+            self._editor_window.restore()
+            return True
+        if not self._frontend_dir:
+            return False
+
+        # Restore saved position, or center on screen
+        saved = self._config.get("editor_pos")
+        if saved:
+            x, y = saved.get("x", 100), saved.get("y", 100)
+        else:
+            # Center on screen (approximate — pywebview doesn't expose screen size easily)
+            x, y = None, None  # let pywebview center it
+
+        kwargs = dict(
+            title="Preset Editor",
+            url=os.path.join(self._frontend_dir, "editor.html"),
+            js_api=self,
+            width=900,
+            height=650,
+            resizable=True,
+            min_size=(700, 500),
+            on_top=False,
+            frameless=True,
+            easy_drag=False,
+            background_color="#0a0a0c",
+        )
+        if x is not None and y is not None:
+            kwargs["x"] = x
+            kwargs["y"] = y
+
+        self._editor_window = webview.create_window(**kwargs)
+        self._editor_window.events.closed += self._on_editor_closed
+        return True
+
+    def _on_editor_closed(self):
+        self._editor_window = None
+        self._notify_companion()
+
+    def _save_editor_pos(self):
+        """Save editor window position to config."""
+        try:
+            if self._editor_window and self._editor_window in webview.windows:
+                self._config["editor_pos"] = {"x": self._editor_window.x, "y": self._editor_window.y}
+                _save_config(self._config)
+        except Exception:
+            pass
+
+    def close_editor(self):
+        self._save_editor_pos()
+        if self._editor_window and self._editor_window in webview.windows:
+            self._editor_window.destroy()
+
+    def minimize_editor(self):
+        if self._editor_window and self._editor_window in webview.windows:
+            self._editor_window.minimize()
+
+    def move_editor(self, dx, dy):
+        if self._editor_window and self._editor_window in webview.windows:
+            w = self._editor_window
+            w.move(w.x + dx, w.y + dy)
+
+    def save_editor_pos(self):
+        """Called from JS on drag end to persist editor position."""
+        self._save_editor_pos()
+
+    def is_editor_open(self):
+        """Return True if editor window is currently open."""
+        return self._editor_window is not None and self._editor_window in webview.windows
+
+    # ─── Pill Mode ───
 
     def get_pill_size(self, visible_keys=None):
         """Calculate pill size based on actually visible stats."""
@@ -397,7 +499,6 @@ class QuestAPI:
         if not pinned:
             return [64, 64]
 
-        # Use visible_keys from frontend if provided, otherwise use pinned
         keys = visible_keys if visible_keys else pinned
 
         if not keys:
@@ -413,25 +514,32 @@ class QuestAPI:
         else:
             w = 190
 
-        h = 12  # padding (6 top + 6 bottom)
-        h += other_count * 18  # tight: icon + label + value
+        h = 12
+        h += other_count * 18
         if has_sz:
-            h += 72  # zone title (16) + 3 buff lines (3*16) + gaps (8)
+            h += 120  # zone title + 3 buffs with name+desc stacked
         h = max(h, 30)
         return [w, h]
+
+    def resize_pill(self, w, h):
+        """Resize pill to exact dimensions (called from JS after measuring content)."""
+        from webview.window import FixPoint
+        fp = self._get_fix_point()
+        if self._companion_window and self._companion_window in webview.windows:
+            self._companion_window.resize(int(w), int(h), fix_point=fp)
 
     def collapse_to_pill(self, visible_keys=None):
         from webview.window import FixPoint
         fp = self._get_fix_point()
         w, h = self.get_pill_size(visible_keys)
-        for win in webview.windows:
-            win.resize(w, h, fix_point=fp)
+        if self._companion_window and self._companion_window in webview.windows:
+            self._companion_window.resize(w, h, fix_point=fp)
 
     def expand_from_pill(self):
         from webview.window import FixPoint
         fp = self._get_fix_point()
-        for w in webview.windows:
-            w.resize(420, 650, fix_point=fp)
+        if self._companion_window and self._companion_window in webview.windows:
+            self._companion_window.resize(420, 650, fix_point=fp)
 
     def _get_fix_point(self):
         from webview.window import FixPoint
@@ -453,9 +561,9 @@ class QuestAPI:
         return True
 
     def move_window(self, dx, dy):
-        for w in webview.windows:
-            x, y = w.x + dx, w.y + dy
-            w.move(x, y)
+        if self._companion_window and self._companion_window in webview.windows:
+            w = self._companion_window
+            w.move(w.x + dx, w.y + dy)
 
 
 def main():
@@ -472,6 +580,8 @@ def main():
         base_dir = os.path.dirname(os.path.abspath(__file__))
     frontend_dir = os.path.join(base_dir, "frontend")
 
+    api._frontend_dir = frontend_dir
+
     window = webview.create_window(
         title="Hero Siege Companion",
         url=os.path.join(frontend_dir, "index.html"),
@@ -485,6 +595,7 @@ def main():
         easy_drag=False,
         background_color="#0a0a0c",
     )
+    api._companion_window = window
 
     webview.start(debug=False)
 

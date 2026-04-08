@@ -25,12 +25,21 @@ A desktop companion app for [Hero Siege](https://store.steampowered.com/app/2692
 - Search and filter items by rarity, type, element, stat/affix, level
 - Runewords with full rune details and compatible item types
 
-### Presets
-- Create custom presets to organize your quest progression
-- Pin quests from the database — add a single quest or an entire questline
-- Arrange quests in categories with drag ordering
-- Add personal notes (rich text) between quests
+### Preset Editor
+- Dedicated editor window with two-panel layout (quest database + preset structure)
+- Drag & drop quests from the database to your preset categories (powered by SortableJS)
+- Reorder quests and categories via drag & drop
+- Add personal notes with rich text editing (bold, italic, underline, strikethrough via TipTap)
+- Inline note editing — expand and edit directly in the preset tree
 - Multiple presets with import/export as JSON
+- Editor remembers its position between sessions
+
+### Companion (Read-only)
+- Load a preset and track your progression
+- Quests displayed as detailed cards with description, objectives, locations and notes
+- Check quests as done — completed quests collapse to save space
+- Toggle notes visibility with the eye button
+- Category headers with runic design, progress bars
 
 ### Live Stats
 - **Character** — name, level, difficulty, kill counts
@@ -43,9 +52,16 @@ A desktop companion app for [Hero Siege](https://store.steampowered.com/app/2692
 
 ### Pill Mode
 - Collapse the app to a small pill overlay
-- Pinned stats displayed directly on the pill (satanic zone with buffs, gold, XP...)
+- Pinned stats displayed directly on the pill with separators between each stat
+- Satanic zone buffs shown with icons, names and descriptions
 - Click to expand back to full app, auto-collapse when mouse leaves
+- Long-press and drag to reposition the pill without opening the companion
 - Configurable anchor corner (top-left, top-right, bottom-left, bottom-right)
+- Pill stays open when the preset editor is active
+
+### Settings
+- Font theme: Classic (Georgia) or System (Segoe UI)
+- Pill mode toggle and anchor position
 
 ## Limitations
 

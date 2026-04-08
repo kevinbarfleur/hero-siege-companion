@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preset Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="editor-app">
+    <!-- Window border (top) -->
+    <div class="window-border window-border--top"></div>
+
+    <!-- Titlebar (same runic design, minimal controls) -->
+    <div class="titlebar" id="editor-titlebar">
+      <div class="titlebar__left"></div>
+      <div class="titlebar__drag">
+        <span class="titlebar__rune">&#9670;</span>
+        <span class="titlebar__title">Preset Editor</span>
+        <span class="titlebar__rune">&#9670;</span>
+      </div>
+      <div class="titlebar__controls">
+        <button class="titlebar__btn titlebar__btn--minimize" id="ed-btn-minimize" title="Minimize">
+          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+        <button class="titlebar__btn titlebar__btn--close" id="ed-btn-close" title="Close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Top bar: preset selector + actions -->
+    <div class="editor-topbar" id="editor-topbar">
+      <!-- Rendered by JS -->
+    </div>
+
+    <!-- Two-panel layout -->
+    <div class="editor-layout">
+      <!-- LEFT: Quest database browser -->
+      <div class="editor-panel editor-panel--left">
+        <div class="editor-panel__header">
+          <span class="editor-panel__title">Quest Database</span>
+        </div>
+        <div class="editor-search">
+          <div class="runic-input runic-input--sm">
+            <div class="runic-input__groove">
+              <span class="runic-input__rune runic-input__rune--tl">&#9670;</span>
+              <span class="runic-input__rune runic-input__rune--tr">&#9670;</span>
+              <span class="runic-input__rune runic-input__rune--bl">&#9670;</span>
+              <span class="runic-input__rune runic-input__rune--br">&#9670;</span>
+              <svg class="runic-input__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input type="text" class="runic-input__field" id="ed-search" placeholder="Search quests...">
+              <div class="runic-input__glow"></div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-quest-browser runic-scrollbar" id="ed-quest-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Resize handle -->
+      <div class="editor-resize-handle" id="ed-resize-handle"></div>
+
+      <!-- RIGHT: Preset structure -->
+      <div class="editor-panel editor-panel--right">
+        <div class="editor-preset-tree runic-scrollbar" id="ed-preset-tree">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="editor-panel__footer editor-panel__footer--right">
+          <button class="runic-btn runic-btn--ghost runic-btn--sm" id="ed-add-free-note">+ Add Note</button>
+          <button class="runic-btn runic-btn--ghost runic-btn--sm" id="ed-add-category">+ Add Category</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom action bar -->
+    <div class="editor-bottom-bar" id="editor-bottom-bar">
+      <button class="runic-btn runic-btn--sm" id="ed-duplicate" data-tip="Duplicate preset">Duplicate</button>
+      <button class="runic-btn runic-btn--sm" id="ed-export" data-tip="Export as JSON">Export</button>
+      <button class="runic-btn runic-btn--sm" id="ed-import" data-tip="Import from JSON">Import</button>
+      <div class="editor-bottom-bar__spacer"></div>
+      <button class="runic-btn runic-btn--sm runic-btn--danger" id="ed-delete">Delete Preset</button>
+    </div>
+  </div>
+
+  <!-- Overlay for confirmations/popups -->
+  <div id="editor-overlay" class="add-popup-overlay" style="display:none;"></div>
+
+  <!-- SortableJS — UMD build via regular script tag (most reliable) -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <script>
+    if (window.Sortable) {
+      console.log('SortableJS loaded (jsdelivr)');
+      window.dispatchEvent(new Event('sortable-loaded'));
+    } else {
+      console.warn('SortableJS failed to load from jsdelivr');
+    }
+  </script>
+
+  <!-- TipTap — ES module -->
+  <script type="module">
+    try {
+      const [core, starterKit, placeholder, underline] = await Promise.all([
+        import('https://esm.sh/@tiptap/core@2.11.5'),
+        import('https://esm.sh/@tiptap/starter-kit@2.11.5'),
+        import('https://esm.sh/@tiptap/extension-placeholder@2.11.5'),
+        import('https://esm.sh/@tiptap/extension-underline@2.11.5'),
+      ]);
+      window.TipTap = {
+        Editor: core.Editor,
+        StarterKit: starterKit.default,
+        Placeholder: placeholder.default,
+        Underline: underline.default,
+      };
+      window.dispatchEvent(new Event('tiptap-loaded'));
+    } catch (e) {
+      console.warn('TipTap unavailable (offline?):', e);
+    }
+  </script>
+
+  <script src="editor.js"></script>
+</body>
+</html>
