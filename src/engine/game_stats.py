@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 from src.consts.logger import LOGGING_NAME
 from src.models.stats.session import Session
 from src.models.stats.gold import GoldStats
@@ -29,7 +27,6 @@ class GameStats:
     _last_account_raw = {}
     logger = logging.getLogger(LOGGING_NAME)
 
-    _SZ_CACHE = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'HeroSiegeCompanion', 'last_satanic_zone.json')
 
     CLASS_NAMES = {
         1: 'Viking', 2: 'Pyromancer', 3: 'Demonspawn', 4: 'Marauder',
@@ -56,8 +53,6 @@ class GameStats:
             self.added_items.update(added_item_object=event.value)
         if isinstance(event, SatanicZoneEvent):
             self.satanic_zone.update(event.value)
-            # Persist last known satanic zone for next app launch
-            self._save_last_satanic_zone(event.value)
 
     def reset(self):
         self.logger.info("Resetting all game stats...")
@@ -86,35 +81,6 @@ class GameStats:
             )
         self.added_items.update(items_per_hour=_items_per_hour)
 
-    def _save_last_satanic_zone(self, sz_info):
-        """Persist last satanic zone to disk for instant display on next launch."""
-        try:
-            import time
-            data = {
-                'zone': sz_info.satanic_zone,
-                'buffs': [{'name': b.buff_name, 'desc': b.buff_description} for b in sz_info.buffs],
-                'timestamp': time.time(),
-            }
-            with open(self._SZ_CACHE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False)
-        except Exception:
-            pass
-
-    def _load_last_satanic_zone(self):
-        """Load last known satanic zone from disk. Only use if < 4 hours old."""
-        try:
-            import time
-            with open(self._SZ_CACHE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            ts = data.get('timestamp', 0)
-            age_hours = (time.time() - ts) / 3600
-            if age_hours > 4:
-                return None  # Too old, likely rotated since then
-            data['cached'] = True
-            return data
-        except (FileNotFoundError, json.JSONDecodeError):
-            return None
-
     def to_dict(self):
         """Return all stats as a JSON-serializable dict for the frontend."""
         self.update_hourly_stats()
@@ -125,9 +91,6 @@ class GameStats:
                 'zone': sz.satanic_zone,
                 'buffs': [{'name': b.buff_name, 'desc': b.buff_description} for b in sz.buffs],
             }
-        else:
-            # Fallback: load last known from disk
-            sz_data = self._load_last_satanic_zone()
 
         items = {}
         for rarity, data in self.added_items.added_items.items():
@@ -175,4 +138,5 @@ class GameStats:
             'items': items,
             'items_per_hour': items_per_hour,
             'satanic_zone': sz_data,
+            'has_mail': self.session.has_mail,
         }

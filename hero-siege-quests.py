@@ -23,7 +23,7 @@ def _load_config():
         with open(CONFIG_PATH, 'r') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"pill_mode": False, "pill_origin": "top-right"}
+        return {"pill_mode": True, "pill_origin": "top-right"}
 
 
 def _save_config(config):
@@ -300,6 +300,8 @@ class QuestAPI:
         for key in pinned:
             if key in stats:
                 result[key] = stats[key]
+        # Always include mail flag (shown as badge, not a pinned stat)
+        result['has_mail'] = stats.get('has_mail', False)
         return result
 
     # ─── Items ───

@@ -56,7 +56,7 @@ class Backend:
         if not hs_ips:
             ip_filter_string = "len < 0"
         else:
-            ip_filter_string = f"(host {' or host '.join(hs_ips)}) and len > 30"
+            ip_filter_string = f"(host {' or host '.join(sorted(hs_ips))}) and len > 30"
         # following filter line commented out because there seems to be a flaw because no package is actually getting through
         # return f"({base_filter}) and ({json_filter} or {special_filter})"
         return ip_filter_string

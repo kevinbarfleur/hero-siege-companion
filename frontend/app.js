@@ -1027,6 +1027,8 @@ let pinnedStats = [];
 let snifferStatus = 'off';
 let statsInterval = null;
 
+const PILL_MAX_W = 350;
+
 const STAT_LABELS = {
   character: { icon: '\uD83D\uDC64', name: 'Character', desc: 'Character info & kill stats' },
   session: { icon: '\u23F1', name: 'Session', desc: 'Session duration' },
@@ -1202,10 +1204,13 @@ function renderPillStatsHTML(data) {
 
   for (const [key, val] of Object.entries(data)) {
     const meta = STAT_LABELS[key];
-    if (!meta || !val) continue;
+    if (!meta) continue;
 
     if (key === 'satanic_zone') {
-      if (!val.zone) continue;
+      if (!val || !val.zone) {
+        html += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span></div>`;
+        continue;
+      }
       html += `<div class="pill-sz">`;
       html += `<div class="pill-sz__zone">${val.zone}</div>`;
       if (val.buffs && val.buffs.length > 0) {
@@ -1223,6 +1228,7 @@ function renderPillStatsHTML(data) {
       continue;
     }
 
+    if (!val) continue;
     // Compact stat line
     let display = '';
     if (key === 'character') display = val.name ? `${val.name} Lv.${val.level}` : '';
@@ -1280,7 +1286,7 @@ async function updatePillStats() {
       // Resize for placeholders
       requestAnimationFrame(() => {
         const h = pillContent.scrollHeight + 4;
-        const w = pillContent.scrollWidth + 22;
+        const w = Math.min(pillContent.scrollWidth + 22, PILL_MAX_W);
         window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
       });
       return;
@@ -1295,10 +1301,16 @@ async function updatePillStats() {
       // Resize pill to fit actual rendered content
       requestAnimationFrame(() => {
         const h = pillContent.scrollHeight + 4;  // +4 for border
-        const w = pillContent.scrollWidth + 22;   // +22 for padding+border
-        const minW = 270;
-        window.pywebview.api.resize_pill(Math.max(w, minW), Math.max(h, 30));
+        const w = Math.min(pillContent.scrollWidth + 22, PILL_MAX_W);   // +22 for padding+border
+        window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
       });
+    }
+
+    // Mail badge — show/hide the tab peeking behind the pill
+    const mailBadge = document.getElementById('pill-mail-badge');
+    if (mailBadge) {
+      const hasMail = data && data.has_mail;
+      mailBadge.style.display = hasMail ? '' : 'none';
     }
   } catch (e) {}
 }
@@ -1657,7 +1669,7 @@ async function collapseToPill() {
   if (pinnedStats && pinnedStats.length > 0 && pillStats.innerHTML) {
     requestAnimationFrame(() => {
       const h = pillContent.scrollHeight + 4;
-      const w = pillContent.scrollWidth + 22;
+      const w = Math.min(pillContent.scrollWidth + 22, PILL_MAX_W);
       window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
     });
   } else {

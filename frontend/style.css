@@ -618,6 +618,40 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Mail banner — medieval pennant hanging from top-right */
+.pill-mail-badge {
+  position: absolute;
+  top: -1px;
+  right: 10px;
+  z-index: 10;
+  width: 22px;
+  height: 32px;
+  background: var(--color-gold);
+  color: var(--color-bg-primary);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 5px;
+  /* Swallowtail: rectangle + V-notch at bottom */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 68%, 0 100%);
+  transform-origin: top center;
+  animation: banner-sway 3s steps(5, end) infinite;
+  filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.5));
+}
+@keyframes banner-sway {
+  0%   { transform: rotate(0deg); }
+  20%  { transform: rotate(2.5deg); }
+  40%  { transform: rotate(-1deg); }
+  60%  { transform: rotate(2deg); }
+  80%  { transform: rotate(-1.5deg); }
+  100% { transform: rotate(0deg); }
+}
+.pill-mail-badge svg {
+  display: block;
+  width: 10px;
+  height: 8px;
+}
+
 /* App collapse/expand transitions */
 #app.app--hidden {
   display: none !important;

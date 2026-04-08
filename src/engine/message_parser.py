@@ -227,5 +227,21 @@ class MessageParser:
     @staticmethod
     def reset_packet_buffers():
         global _continuos_packets, _last_src_ack
+        # Flush buffered packets before clearing to avoid losing events
+        try:
+            from src.engine import Engine
+            for key, packets in list(_continuos_packets.items()):
+                if not packets:
+                    continue
+                load = "".join(packets).replace("'b'", "")
+                for possible_msg in load.split("\\"):
+                    msg = MessageParser.capture(possible_msg, "flush", "flush")
+                    if msg is not None:
+                        events = MessageParser.message_to_event([msg])
+                        if events:
+                            for event in events:
+                                Engine.game_stats.process_event(event)
+        except Exception:
+            pass
         _continuos_packets.clear()
         _last_src_ack.clear()
