@@ -2104,7 +2104,19 @@ async function updateWebStatus() {
 // ─── Settings panel ───
 
 let pillOrigin = 'top-right';
+let fontTheme = 'classic';
 let settingsBuilt = false;
+
+function applyFontTheme(theme) {
+  const root = document.documentElement;
+  if (theme === 'system') {
+    root.style.setProperty('--font-display', '"Segoe UI", Tahoma, sans-serif');
+    root.style.setProperty('--font-body', '"Segoe UI", Tahoma, sans-serif');
+  } else {
+    root.style.setProperty('--font-display', 'Georgia, "Times New Roman", serif');
+    root.style.setProperty('--font-body', 'Georgia, "Times New Roman", serif');
+  }
+}
 
 function toggleSettings() {
   if (!settingsBuilt) buildSettingsPanel();
@@ -2167,6 +2179,20 @@ function buildSettingsPanel() {
         </button>
       </div>
     </div>
+    <div class="setting-row setting-row--vertical">
+      <div class="setting-row__info">
+        <div class="setting-row__label">Font</div>
+        <div class="setting-row__desc">Choose a font for better readability.</div>
+      </div>
+      <div class="origin-picker" id="font-picker">
+        <button class="origin-picker__btn${fontTheme === 'classic' ? ' origin-picker__btn--active' : ''}" data-font="classic">
+          <span class="origin-picker__label" style="font-family:Georgia,serif">Classic</span>
+        </button>
+        <button class="origin-picker__btn${fontTheme === 'system' ? ' origin-picker__btn--active' : ''}" data-font="system">
+          <span class="origin-picker__label" style="font-family:'Segoe UI',sans-serif">System</span>
+        </button>
+      </div>
+    </div>
     <div class="settings-panel__credits">
       <div class="settings-panel__credit-line">Game data by <a href="https://hero-siege-helper.vercel.app/" target="_blank" class="settings-panel__link">hero-siege-helper.vercel.app</a></div>
       <div class="settings-panel__credit-line">Stats inspired by <a href="https://github.com/GuilhermeFaga/hero-siege-stats" target="_blank" class="settings-panel__link">Hero Siege Stats</a></div>
@@ -2197,6 +2223,17 @@ function buildSettingsPanel() {
       pillOrigin = btn.dataset.origin;
       await window.pywebview.api.set_setting('pill_origin', pillOrigin);
       panel.querySelectorAll('.origin-picker__btn').forEach(b => b.classList.remove('origin-picker__btn--active'));
+      btn.classList.add('origin-picker__btn--active');
+    });
+  });
+
+  // Font picker
+  panel.querySelectorAll('[data-font]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      fontTheme = btn.dataset.font;
+      applyFontTheme(fontTheme);
+      await window.pywebview.api.set_setting('font_theme', fontTheme);
+      panel.querySelectorAll('[data-font]').forEach(b => b.classList.remove('origin-picker__btn--active'));
       btn.classList.add('origin-picker__btn--active');
     });
   });
@@ -2310,6 +2347,8 @@ window.addEventListener('pywebviewready', async () => {
     const settings = await window.pywebview.api.get_settings();
     isPillMode = settings.pill_mode || false;
     pillOrigin = settings.pill_origin || 'top-right';
+    fontTheme = settings.font_theme || 'classic';
+    applyFontTheme(fontTheme);
     document.getElementById('btn-pill').style.display = isPillMode ? '' : 'none';
     // Auto-collapse to pill on startup if pill mode is active
     if (isPillMode) {
