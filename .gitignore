@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.log
+scripts/
+*.exe
+cache_*.json
+config.json
+presets.json
+last_satanic_zone.json
+raw_events.log
+companion.log
+.claude/

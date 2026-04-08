@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hero Siege Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Custom window border (top) -->
+    <div class="window-border window-border--top"></div>
+
+    <!-- Custom title bar (replaces Windows chrome) -->
+    <div class="titlebar" id="titlebar">
+      <div class="titlebar__left">
+        <span class="titlebar__web-status" id="web-status" title="Web data status">&#9679;</span>
+      </div>
+      <div class="titlebar__drag">
+        <span class="titlebar__rune">&#9670;</span>
+        <span class="titlebar__title">Hero Siege Companion</span>
+        <span class="titlebar__rune">&#9670;</span>
+      </div>
+      <div class="titlebar__controls">
+        <button class="titlebar__btn titlebar__btn--pill" id="btn-pill" title="Collapse to pill" style="display:none">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+        </button>
+        <button class="titlebar__btn titlebar__btn--settings" id="btn-settings" title="Settings">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+        <button class="titlebar__btn titlebar__btn--minimize" id="btn-minimize" title="Minimize">
+          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+        <button class="titlebar__btn titlebar__btn--close" id="btn-close" title="Close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Select -->
+    <div class="runic-select" id="category-select">
+      <div class="runic-select__trigger" id="category-trigger">
+        <span class="runic-select__rune runic-select__rune--tl">&#9670;</span>
+        <span class="runic-select__rune runic-select__rune--tr">&#9670;</span>
+        <span class="runic-select__rune runic-select__rune--bl">&#9670;</span>
+        <span class="runic-select__rune runic-select__rune--br">&#9670;</span>
+        <span class="runic-select__value" id="category-value">Quests</span>
+        <svg class="runic-select__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 6l4 4 4-4"/>
+        </svg>
+        <div class="runic-select__glow"></div>
+      </div>
+      <div class="runic-select__dropdown" id="category-dropdown" style="display:none;">
+        <button class="runic-select__option runic-select__option--active" data-category="quests">Quests</button>
+        <button class="runic-select__option" data-category="items">Items</button>
+        <button class="runic-select__option" data-category="runewords">Runewords</button>
+        <button class="runic-select__option" data-category="runes">Runes</button>
+        <button class="runic-select__option" data-category="stats">Stats</button>
+      </div>
+    </div>
+
+    <!-- Runic Header -->
+    <div class="runic-header-wrapper runic-header-wrapper--attached">
+      <div class="runic-header">
+        <div class="runic-header__accent runic-header__accent--left"></div>
+        <div class="runic-header__accent runic-header__accent--right"></div>
+        <div class="runic-header__content">
+          <h1 class="runic-header__title">
+            <span class="runic-header__rune">&#9670;</span>
+            <span id="header-title">QUESTS</span>
+            <span class="runic-header__rune">&#9670;</span>
+          </h1>
+          <p class="runic-header__subtitle" id="status-text">Waiting for game data...</p>
+        </div>
+        <div class="runic-header__edge"></div>
+      </div>
+    </div>
+
+    <!-- Runic Radio Tabs -->
+    <div class="runic-radio" id="tab-switcher">
+      <div class="runic-radio__groove">
+        <div class="runic-radio__slider" id="tab-slider"></div>
+        <button class="runic-radio__option runic-radio__option--active" data-tab="pinned" role="radio" aria-checked="true">
+          <span class="runic-radio__label">Pinned</span>
+        </button>
+        <button class="runic-radio__option" data-tab="all" role="radio" aria-checked="false">
+          <span class="runic-radio__label">All</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Runic Input Search (below tabs) -->
+    <div class="search-bar">
+      <div class="runic-input runic-input--sm">
+        <div class="runic-input__groove">
+          <span class="runic-input__rune runic-input__rune--tl">&#9670;</span>
+          <span class="runic-input__rune runic-input__rune--tr">&#9670;</span>
+          <span class="runic-input__rune runic-input__rune--bl">&#9670;</span>
+          <span class="runic-input__rune runic-input__rune--br">&#9670;</span>
+          <svg class="runic-input__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" class="runic-input__field" id="search-input" placeholder="Search quests...">
+          <div class="runic-input__glow"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content box -->
+    <div class="runic-box runic-box--attached runic-box--padding-none">
+      <div class="runic-box__corner runic-box__corner--tl"></div>
+      <div class="runic-box__corner runic-box__corner--tr"></div>
+      <div class="runic-box__corner runic-box__corner--bl"></div>
+      <div class="runic-box__corner runic-box__corner--br"></div>
+      <div class="runic-box__content" id="item-filters-container">
+        <div id="quest-list" class="quest-list runic-scrollbar">
+          <div class="quest-list__empty">
+            <span class="runic-header__rune">&#9670;</span>
+            <span>Waiting for quest data...</span>
+            <span class="runic-header__rune">&#9670;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="app-footer">
+      <button class="app-footer__debug" id="btn-debug">Copy debug info</button>
+    </div>
+
+    <!-- Add-to-guide popup (built dynamically by JS) -->
+    <div id="add-popup-overlay" class="add-popup-overlay" style="display:none;"></div>
+  </div>
+
+  <!-- Pill view (shown when collapsed) -->
+  <div id="pill-view" class="pill-view" style="display:none">
+    <div class="pill-content" id="pill-content">
+      <img src="icon.png" class="pill-view__icon" id="pill-logo" alt="HSC">
+      <div id="pill-stats" class="pill-stats"></div>
+    </div>
+  </div>
+
+  <!-- TipTap rich text editor (loaded from CDN, fallback to textarea if offline) -->
+  <script type="module">
+    try {
+      const [core, starterKit, placeholder, underline] = await Promise.all([
+        import('https://esm.sh/@tiptap/core@2.11.5'),
+        import('https://esm.sh/@tiptap/starter-kit@2.11.5'),
+        import('https://esm.sh/@tiptap/extension-placeholder@2.11.5'),
+        import('https://esm.sh/@tiptap/extension-underline@2.11.5'),
+      ]);
+      window.TipTap = {
+        Editor: core.Editor,
+        StarterKit: starterKit.default,
+        Placeholder: placeholder.default,
+        Underline: underline.default,
+      };
+      window.dispatchEvent(new Event('tiptap-loaded'));
+    } catch (e) {
+      console.warn('TipTap unavailable (offline?):', e);
+    }
+  </script>
+
+  <script src="app.js"></script>
+</body>
+</html>
