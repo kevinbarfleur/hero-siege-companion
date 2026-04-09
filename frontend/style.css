@@ -614,6 +614,31 @@ body {
   font-style: italic;
   margin-top: 2px;
 }
+.pill-sz__hint {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  color: var(--color-accent-light);
+  margin-top: 4px;
+  line-height: 1.3;
+  opacity: 0.85;
+}
+.pill-sz__hint-icon {
+  font-style: normal;
+  margin-right: 3px;
+}
+.stat-card__hint {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-accent-light);
+  margin-top: 6px;
+  line-height: 1.35;
+  opacity: 0.85;
+}
+.stat-card__hint-icon {
+  font-style: normal;
+  margin-right: 4px;
+}
 .pill-stat__value--dim {
   color: var(--color-text-muted);
 }

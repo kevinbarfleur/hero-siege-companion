@@ -1115,7 +1115,7 @@ function renderStatCard(key, data, isPinned) {
         }
       }
     } else {
-      content = `<div class="stat-card__value stat-card__value--dim">Enter a Satanic Zone to see data</div>`;
+      content = `<div class="stat-card__value stat-card__value--dim">Waiting for server update...</div><div class="stat-card__hint"><span class="stat-card__hint-icon">\u21BB</span>You can force a refresh by vote resetting or creating a new game.</div>`;
     }
   } else if (!data) {
     content = `<div class="stat-card__value stat-card__value--dim">Waiting for game data...</div>`;
@@ -1208,7 +1208,7 @@ function renderPillStatsHTML(data) {
 
     if (key === 'satanic_zone') {
       if (!val || !val.zone) {
-        html += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span></div>`;
+        html += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span><span class="pill-sz__hint"><span class="pill-sz__hint-icon">\u21BB</span>Vote reset or create a new game to force refresh</span></div>`;
         continue;
       }
       html += `<div class="pill-sz">`;
@@ -1277,7 +1277,7 @@ async function updatePillStats() {
         const meta = STAT_LABELS[key];
         if (!meta) continue;
         if (key === 'satanic_zone') {
-          placeholderHtml += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span></div>`;
+          placeholderHtml += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span><span class="pill-sz__hint"><span class="pill-sz__hint-icon">\u21BB</span>Vote reset or create a new game to force refresh</span></div>`;
         } else {
           placeholderHtml += `<div class="pill-stat"><span class="pill-stat__icon">${meta.icon}</span><span class="pill-stat__label">${meta.name}</span><span class="pill-stat__value pill-stat__value--dim">-</span></div>`;
         }
