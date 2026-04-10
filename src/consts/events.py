@@ -4,6 +4,7 @@ EvNameUpdateMail: str = 'UpdateMail'
 EvNameItemAdded: str = 'ItemAdded'
 EvNameUpdateSatanicZone: str = 'UpdateSatanicZone'
 EvNameUpdateAccount: str = 'UpdateAccount'
+EvNameUpdateRoom: str = 'UpdateRoom'
 
 EvKeyName: str = 'name'
 EvKeyValue: str = 'value'

@@ -25,6 +25,8 @@ class GameStats:
     season_mode = None
     _last_account = None
     _last_account_raw = {}
+    _current_act = 0
+    _current_zone = 0
     logger = logging.getLogger(LOGGING_NAME)
 
 
@@ -47,12 +49,26 @@ class GameStats:
             # Store raw dict for extra stats not parsed by AccountMessage
             if hasattr(event.value, '_raw_dict'):
                 self._last_account_raw = event.value._raw_dict
+            # Zone tracking is handled by update_room() via game_state packets
+            # (act_previous is unreliable — encodes progression, not current zone)
         if isinstance(event, MailEvent):
             self.session.update(has_mail=bool(event.value))
         if isinstance(event, AddedItemEvent):
             self.added_items.update(added_item_object=event.value)
         if isinstance(event, SatanicZoneEvent):
             self.satanic_zone.update(event.value)
+
+    def update_room(self, room_str: str):
+        """Update current zone from game_state room field (e.g. 'Act_06_01')."""
+        import re
+        m = re.match(r'Act_(\d+)_(\d+)', room_str)
+        if m:
+            act = int(m.group(1))
+            zone = int(m.group(2))
+            if act != self._current_act or zone != self._current_zone:
+                self.logger.info(f"Room update: {room_str} → Act {act}, Zone {zone}")
+                self._current_act = act
+                self._current_zone = zone
 
     def reset(self):
         self.logger.info("Resetting all game stats...")
@@ -138,5 +154,10 @@ class GameStats:
             'items': items,
             'items_per_hour': items_per_hour,
             'satanic_zone': sz_data,
+            'current_zone': {
+                'act': self._current_act,
+                'zone': self._current_zone,
+                'code': f"{self._current_act}-{self._current_zone}" if self._current_act else "",
+            } if self._current_act else None,
             'has_mail': self.session.has_mail,
         }

@@ -9,7 +9,7 @@ import webview
 from src.engine.logger import _init_logger
 from src.consts.logger import LOGGING_NAME
 from src.engine.cache import load_cache, save_cache
-from src.engine.web_fetcher import fetch_quests as fetch_web_quests, fetch_runewords, fetch_runes, fetch_items
+from src.engine.web_fetcher import fetch_quests as fetch_web_quests, fetch_runewords, fetch_runes, fetch_items, fetch_farm
 
 # User data in %APPDATA%/HeroSiegeCompanion (clean, hidden from user)
 _APP_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'HeroSiegeCompanion')
@@ -23,7 +23,7 @@ def _load_config():
         with open(CONFIG_PATH, 'r') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"pill_mode": True, "pill_origin": "top-right"}
+        return {"pill_mode": True, "pill_origin": "top-right", "pinned_stats": ["satanic_zone", "farm_zone_items"]}
 
 
 def _save_config(config):
@@ -49,9 +49,14 @@ class QuestAPI:
 
     def __init__(self):
         self._config = _load_config()
+        # Ensure default pins for new or existing users
+        if "pinned_stats" not in self._config:
+            self._config["pinned_stats"] = ["satanic_zone", "farm_zone_items"]
+            _save_config(self._config)
         self._presets = _load_presets()
         self._companion_window = None
         self._editor_window = None
+        self._tooltip_window = None
         self._frontend_dir = None
         self._web_status = "loading"  # "loading" | "ready" | "cached" | "offline"
         self._web_quests = load_cache("quests") or []
@@ -60,6 +65,8 @@ class QuestAPI:
         items_cache = load_cache("items")
         self._items = items_cache.get("items", []) if items_cache else []
         self._stat_defs = items_cache.get("stat_defs", []) if items_cache else []
+        farm_cache = load_cache("farm")
+        self._farm = farm_cache if farm_cache else {"zone_names": {}, "items": []}
 
         if self._web_quests:
             self._web_status = "cached"
@@ -110,6 +117,14 @@ class QuestAPI:
                 self._stat_defs = items_data.get("stat_defs", [])
                 any_success = True
                 logger.info(f"Web items: {len(self._items)}, stats: {len(self._stat_defs)}")
+
+            # Farm (zone drop locations)
+            farm_data = fetch_farm()
+            if farm_data:
+                save_cache("farm", farm_data)
+                self._farm = farm_data
+                any_success = True
+                logger.info(f"Web farm: {len(farm_data['items'])} items, {len(farm_data['zone_names'])} zones")
 
             self._web_status = "ready" if any_success else ("cached" if self._web_status == "cached" else "offline")
         except Exception as e:
@@ -179,6 +194,12 @@ class QuestAPI:
                 if item["type"] == "quest":
                     export_item["questline"] = item.get("questline", "")
                     export_item["quest_name"] = item.get("quest_name", "")
+                    export_item["note"] = item.get("note", "")
+                elif item["type"] == "farm":
+                    export_item["item_name"] = item.get("item_name", "")
+                    export_item["zones"] = item.get("zones", [])
+                    export_item["source_type"] = item.get("source_type", "")
+                    export_item["source_name"] = item.get("source_name", "")
                     export_item["note"] = item.get("note", "")
                 else:
                     export_item["text"] = item.get("text", "")
@@ -295,10 +316,26 @@ class QuestAPI:
             return None
         stats = self.get_live_stats()
         if not stats:
-            return None
+            # Still allow farm_zone_items without live stats
+            if 'farm_zone_items' not in pinned:
+                return None
+            stats = {}
         result = {}
         for key in pinned:
-            if key in stats:
+            if key == 'farm_zone_items':
+                # Get farm items for the player's current zone (not satanic zone)
+                cz = stats.get("current_zone")
+                if cz and cz.get("code"):
+                    result['farm_zone_items'] = self.get_farm_items_for_zone(cz["code"])
+                else:
+                    # Fallback to satanic zone if current zone not available
+                    sz = stats.get("satanic_zone", {})
+                    zone_str = sz.get("zone", "") if isinstance(sz, dict) else ""
+                    if zone_str:
+                        result['farm_zone_items'] = self.get_farm_items_for_zone(zone_str)
+                    else:
+                        result['farm_zone_items'] = {"zone_code": "", "zone_name": "", "items": []}
+            elif key in stats:
                 result[key] = stats[key]
         # Always include mail flag (shown as badge, not a pinned stat)
         result['has_mail'] = stats.get('has_mail', False)
@@ -357,6 +394,107 @@ class QuestAPI:
         rarities = sorted(set(i.get("rarity", "") for i in self._items if i.get("rarity")))
         return {"types": types, "rarities": rarities, "stat_defs": self._stat_defs or []}
 
+    # ─── Farm (zone drop locations) ───
+
+    def _normalize_name(self, name):
+        """Normalize item name for matching (lowercase, strip special chars)."""
+        return name.lower().replace("\u00b4", "'").replace("\u2019", "'").replace("`", "'").strip()
+
+    def _enrich_farm_item(self, farm_item):
+        """Add rarity/level/type from items cache by matching name."""
+        norm = self._normalize_name(farm_item["name"])
+        for item in self._items:
+            if self._normalize_name(item["name"]) == norm:
+                return {
+                    **farm_item,
+                    "rarity": item.get("rarity", ""),
+                    "level": item.get("level", 0),
+                    "type": item.get("type", ""),
+                    "tier": item.get("tier", ""),
+                }
+        return farm_item
+
+    def get_farm_data(self, search="", source_types=None, zone_code=""):
+        """Return filtered farm items with zone drop locations."""
+        items = self._farm.get("items", [])
+        if search:
+            s = search.lower()
+            items = [i for i in items if s in i["name"].lower()]
+        if zone_code:
+            items = [i for i in items if zone_code in i.get("zones", [])]
+        if source_types:
+            def has_source(item):
+                for src in item.get("sources", []):
+                    if src["type"] in source_types:
+                        return True
+                return False
+            items = [i for i in items if i.get("zones") or has_source(i)]
+            if "zone" not in source_types:
+                items = [i for i in items if not i.get("zones") or any(
+                    s["type"] in source_types for s in i.get("sources", [])
+                )]
+
+        enriched = [self._enrich_farm_item(i) for i in items]
+        return {
+            "items": enriched,
+            "zone_names": self._farm.get("zone_names", {}),
+            "total": len(self._farm.get("items", [])),
+        }
+
+    def get_farm_filters(self):
+        """Return available filter options for the farm tab."""
+        items = self._farm.get("items", [])
+        source_types = set()
+        for item in items:
+            if item.get("zones"):
+                source_types.add("zone")
+            for src in item.get("sources", []):
+                source_types.add(src["type"])
+        zones = sorted(self._farm.get("zone_names", {}).keys())
+        return {"source_types": sorted(source_types), "zones": zones}
+
+    def get_farm_items_for_zone(self, zone_str=""):
+        """Return farm items for a detected zone (from sniffer).
+
+        Args:
+            zone_str: Zone string from sniffer, e.g. "Act 2 : Crystal Village"
+                      or a zone code like "2-1"
+        """
+        if not zone_str:
+            return {"zone_code": "", "zone_name": "", "items": []}
+
+        # If it's already a zone code
+        zone_code = zone_str
+        zone_name = self._farm.get("zone_names", {}).get(zone_str, "")
+
+        # If it's a sniffer zone string "Act N : ZoneName"
+        import re
+        match = re.match(r'Act\s+(\d+)\s*:\s*(.+)', zone_str)
+        if match:
+            from src.consts.satanic_zone_names import satanic_zone_names
+            act = int(match.group(1))
+            name = match.group(2).strip()
+            act_zones = satanic_zone_names.get(act, [])
+            zone_code = None
+            for idx, zn in enumerate(act_zones):
+                if zn == name:
+                    zone_code = f"{act}-{idx + 1}"
+                    zone_name = name
+                    break
+
+        if not zone_code:
+            return {"zone_code": "", "zone_name": zone_str, "items": []}
+
+        # Find items for this zone
+        items = [i for i in self._farm.get("items", []) if zone_code in i.get("zones", [])]
+        enriched = [self._enrich_farm_item(i) for i in items]
+
+        return {
+            "zone_code": zone_code,
+            "zone_name": zone_name or zone_code,
+            "items": enriched,
+        }
+
     # ─── Runewords & Runes ───
 
     def get_runewords(self):
@@ -383,6 +521,8 @@ class QuestAPI:
             "items_count": len(self._items),
             "runewords_count": len(self._runewords),
             "runes_count": sum(len(t["runes"]) for t in self._runes) if self._runes else 0,
+            "farm_items_count": len(self._farm.get("items", [])),
+            "farm_zones_count": len(self._farm.get("zone_names", {})),
             "presets_count": len(self._presets.get("presets", [])),
             "active_preset_id": self._presets.get("active_preset_id"),
         }
@@ -410,6 +550,10 @@ class QuestAPI:
             self._companion_window.minimize()
 
     def close_window(self):
+        if self._tooltip_window and self._tooltip_window in webview.windows:
+            try: self._tooltip_window.destroy()
+            except Exception: pass
+            self._tooltip_window = None
         if self._editor_window and self._editor_window in webview.windows:
             self._editor_window.destroy()
         if self._companion_window and self._companion_window in webview.windows:
@@ -493,6 +637,86 @@ class QuestAPI:
         """Return True if editor window is currently open."""
         return self._editor_window is not None and self._editor_window in webview.windows
 
+    # ─── Pill Tooltip Window ───
+
+    def show_pill_tooltip(self, item_html):
+        """Show item tooltip in a separate window next to the pill."""
+        if not self._frontend_dir or not self._companion_window:
+            return False
+
+        # Get pill position to place tooltip next to it
+        try:
+            px = self._companion_window.x
+            py = self._companion_window.y
+            pw = self._companion_window.width
+        except Exception:
+            return False
+
+        gap = 6
+        tx = px + pw + gap
+        ty = py
+        tw = 360
+        th = 500
+
+        if self._tooltip_window and self._tooltip_window in webview.windows:
+            # Reuse — move, update content, show
+            try:
+                self._tooltip_window.move(tx, ty)
+                self._tooltip_window.show()
+                escaped = json.dumps(item_html)
+                self._tooltip_window.evaluate_js(f'updateContent({escaped})')
+                return True
+            except Exception:
+                # Window might be in bad state — destroy and recreate
+                try:
+                    self._tooltip_window.destroy()
+                except Exception:
+                    pass
+                self._tooltip_window = None
+
+        # Create new tooltip window
+        escaped = json.dumps(item_html)
+        self._tooltip_window = webview.create_window(
+            title="",
+            url=os.path.join(self._frontend_dir, "tooltip.html"),
+            js_api=self,
+            width=tw,
+            height=th,
+            resizable=False,
+            on_top=True,
+            frameless=True,
+            easy_drag=False,
+            background_color="#0a0a0c",
+            x=tx,
+            y=ty,
+        )
+
+        def _on_tooltip_loaded():
+            try:
+                self._tooltip_window.evaluate_js(f'updateContent({escaped})')
+            except Exception:
+                pass
+        self._tooltip_window.events.loaded += _on_tooltip_loaded
+        return True
+
+    def hide_pill_tooltip(self):
+        """Hide the tooltip window."""
+        if self._tooltip_window and self._tooltip_window in webview.windows:
+            try:
+                self._tooltip_window.hide()
+            except Exception:
+                pass
+        return True
+
+    def resize_pill_tooltip(self, w, h):
+        """Resize tooltip to fit content (called from tooltip.html)."""
+        if self._tooltip_window and self._tooltip_window in webview.windows:
+            try:
+                self._tooltip_window.resize(int(w), int(h))
+            except Exception:
+                pass
+        return True
+
     # ─── Pill Mode ───
 
     def get_pill_size(self, visible_keys=None):
@@ -507,9 +731,10 @@ class QuestAPI:
             return [64, 64]
 
         has_sz = 'satanic_zone' in keys
-        other_count = len([p for p in keys if p != 'satanic_zone'])
+        has_farm = 'farm_zone_items' in keys
+        other_count = len([p for p in keys if p not in ('satanic_zone', 'farm_zone_items')])
 
-        if has_sz:
+        if has_sz or has_farm:
             w = 270
         elif other_count <= 2:
             w = 160
@@ -520,6 +745,8 @@ class QuestAPI:
         h += other_count * 18
         if has_sz:
             h += 120  # zone title + 3 buffs with name+desc stacked
+        if has_farm:
+            h += 140  # zone title + ~6 items
         h = max(h, 30)
         return [w, h]
 

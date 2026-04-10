@@ -161,10 +161,23 @@ class MessageParser:
             elif "experience" in msg_dict:
                 return consts.EvNameUpdateAccount
             else:
-                # Log unidentified messages for analysis
-                raw_logger = logging.getLogger('raw_events')
-                keys = list(msg_dict.keys())[:15]
-                raw_logger.debug(f"[UNKNOWN] keys={keys}")
+                # Check game_state for current room/zone (base64-encoded JSON)
+                # Format: {"room":"Act_06_01","hlevel":"30","mf":"600",...}
+                gs = msg_dict.get('game_state')
+                if gs and isinstance(gs, str):
+                    try:
+                        import base64
+                        decoded = json.loads(base64.b64decode(gs))
+                        room = decoded.get('room', '')
+                        if room:
+                            # Update game stats directly (faster than event pipeline)
+                            try:
+                                from src.engine import Engine
+                                Engine.game_stats.update_room(room)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                 return None
         except Exception as e:
             logger.error(f"Error identifying event type: {e}")

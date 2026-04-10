@@ -292,6 +292,13 @@
 .guide-item__note-rich u { text-decoration: underline; }
 .guide-item__note-rich s { text-decoration: line-through; }
 
+.guide-item__farm-zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 4px 0;
+}
+
 /* Global dark scrollbar */
 *::-webkit-scrollbar { width: 6px; }
 *::-webkit-scrollbar-track { background: transparent; }
@@ -2300,6 +2307,264 @@ body {
 .item-stat--physical .item-stat__value { background: rgba(255, 165, 0, 0.08); color: var(--color-el-physical); }
 
 /* ═══════════════════════════════════════════
+   Farm Tab
+   (mirrors rune-tier group + item-card design)
+   ═══════════════════════════════════════════ */
+
+/* Zone group — same structure as .rune-tier */
+.farm-zone-group {
+  margin: 0 0 8px;
+}
+
+.farm-zone-group__header {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-accent-light);
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(175, 96, 37, 0.2);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+.farm-zone-group__header:hover { color: var(--color-gold); }
+
+.farm-zone-group__code {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-gold);
+  min-width: 30px;
+}
+.farm-zone-group__name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.farm-zone-group__count {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.farm-zone-group--collapsed .farm-zone-group__items { display: none; }
+
+.farm-zone-group__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.farm-zone-group--source .farm-zone-group__header {
+  color: var(--color-text-dim);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.farm-zone-group--source .farm-zone-group__code {
+  font-size: 0.9rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Farm item card — same visual as .rune-card */
+.farm-item {
+  padding: 8px 12px;
+  background: linear-gradient(180deg,
+    rgba(22, 22, 26, 0.9) 0%,
+    rgba(16, 16, 20, 0.95) 100%);
+  border-left: 2px solid var(--item-rarity-color, var(--color-accent-dark));
+  border-radius: 3px;
+  transition: background var(--transition-fast);
+}
+.farm-item:hover {
+  background: linear-gradient(180deg,
+    rgba(28, 28, 32, 0.9) 0%,
+    rgba(20, 20, 24, 0.95) 100%);
+}
+
+.farm-item--compact {
+  padding: 5px 10px;
+}
+
+.farm-item__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.farm-item__name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--item-rarity-color, var(--color-text));
+  text-shadow: 0 0 8px rgba(var(--rarity-rgb, 200,200,200), 0.25);
+}
+.farm-item__level {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+
+.farm-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.farm-item__tag {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-dim);
+}
+.farm-item__tag--rarity {
+  background: rgba(var(--rarity-rgb, 200,200,200), 0.1);
+  color: var(--item-rarity-color, var(--color-text-dim));
+}
+.farm-item__tag--tier {
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--color-gold);
+}
+
+.farm-item__zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.farm-zone-badge {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 2px;
+  background: rgba(201, 162, 39, 0.08);
+  color: var(--color-gold);
+  border: 1px solid rgba(201, 162, 39, 0.15);
+  white-space: nowrap;
+}
+
+.farm-item__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.farm-source-badge {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+.farm-source-badge--boss { background: rgba(233, 54, 54, 0.06); color: #e93636; border-color: rgba(233, 54, 54, 0.15); }
+.farm-source-badge--rare_boss { background: rgba(255, 68, 130, 0.06); color: #ff4482; border-color: rgba(255, 68, 130, 0.15); }
+.farm-source-badge--special { background: rgba(201, 162, 39, 0.06); color: var(--color-gold); border-color: rgba(201, 162, 39, 0.15); }
+.farm-source-badge--crafting { background: rgba(100, 180, 255, 0.06); color: #64b4ff; border-color: rgba(100, 180, 255, 0.15); }
+.farm-source-badge--quest { background: rgba(102, 204, 170, 0.06); color: #66ccaa; border-color: rgba(102, 204, 170, 0.15); }
+
+/* ─── Pill Farm ─── */
+
+.pill-farm {
+  padding: 4px 0 2px;
+}
+.pill-farm__zone {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-gold);
+  padding: 3px 6px 4px;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(175, 96, 37, 0.2);
+  margin-bottom: 2px;
+  transition: color var(--transition-fast);
+}
+.pill-farm__zone:hover { color: #f0c040; }
+.pill-farm__zone--dim { color: var(--color-text-dim); }
+.pill-farm__empty {
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  color: var(--color-text-dim);
+  display: block;
+  padding: 2px 6px;
+}
+
+/* Runic table container */
+.pill-farm__list {
+  position: relative;
+  margin: 2px 4px 0;
+  padding: 2px 0;
+  border: 1px solid rgba(60, 55, 45, 0.25);
+  border-radius: 3px;
+  background: linear-gradient(180deg,
+    rgba(16, 16, 18, 0.6) 0%,
+    rgba(12, 12, 14, 0.4) 100%);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 -1px 2px rgba(50, 45, 35, 0.04);
+}
+/* Subtle corner accents */
+.pill-farm__list::before,
+.pill-farm__list::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 1px;
+  background: linear-gradient(to right, rgba(175, 130, 50, 0.3), transparent);
+}
+.pill-farm__list::before { top: -1px; left: 4px; }
+.pill-farm__list::after { bottom: -1px; right: 4px; transform: scaleX(-1); }
+
+.pill-farm__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+}
+.pill-farm__item:last-child { border-bottom: none; }
+.pill-farm__item:hover { background: rgba(201, 162, 39, 0.06); }
+
+.pill-farm__name {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+.pill-farm__type {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Pill tooltip is a separate window — no styles needed here */
+
+/* ═══════════════════════════════════════════
    Guide Tab — Preset Selector
    ═══════════════════════════════════════════ */
 
@@ -3448,6 +3713,25 @@ body {
   background: linear-gradient(180deg, rgba(18, 18, 20, 0.95), rgba(12, 12, 14, 0.95));
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+}
+
+.editor-panel__tab {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.editor-panel__tab:hover { color: var(--color-text); background: rgba(255,255,255,0.04); }
+.editor-panel__tab--active {
+  color: #c9a227;
+  background: rgba(201, 162, 39, 0.1);
 }
 
 .editor-panel__title {

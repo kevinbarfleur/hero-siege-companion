@@ -77,18 +77,62 @@ function initCategorySelect() {
       select.classList.remove('runic-select--open');
 
       updateHeaderTitle();
+      const placeholders = { quests: 'Search quests...', items: 'Search items...', runewords: 'Search runewords...', runes: 'Search runes...', farm: 'Search farm items...', stats: 'Search pill stats...' };
+      const searchInput = document.getElementById('search-input');
+      searchInput.placeholder = placeholders[cat] || 'Search...';
+      searchInput.value = '';
+      searchTerm = '';
       lastDataStr = '';
       refreshQuests();
     });
   });
 }
 
+function navigateToCategory(cat, search) {
+  currentCategory = cat;
+  const valueEl = document.getElementById('category-value');
+  const dropdown = document.getElementById('category-dropdown');
+  const titles = { quests: 'Quests', items: 'Items', runewords: 'Runewords', runes: 'Runes', farm: 'Farm', stats: 'Pill' };
+  valueEl.textContent = titles[cat] || cat;
+  dropdown.querySelectorAll('.runic-select__option').forEach(o => {
+    o.classList.toggle('runic-select__option--active', o.dataset.category === cat);
+  });
+  updateHeaderTitle();
+  const placeholders = { quests: 'Search quests...', items: 'Search items...', runewords: 'Search runewords...', runes: 'Search runes...', farm: 'Search farm items...', stats: 'Search pill stats...' };
+  const input = document.getElementById('search-input');
+  input.placeholder = placeholders[cat] || 'Search...';
+  // Set or clear search
+  input.value = search || '';
+  searchTerm = (search || '').toLowerCase();
+  lastDataStr = '';
+  refreshQuests();
+}
+
 function updateHeaderTitle() {
-  const titles = { quests: 'QUESTS', items: 'ITEMS', runewords: 'RUNEWORDS', runes: 'RUNES', stats: 'STATS' };
+  const titles = { quests: 'QUESTS', items: 'ITEMS', runewords: 'RUNEWORDS', runes: 'RUNES', farm: 'FARM', stats: 'PILL' };
   document.getElementById('header-title').textContent = titles[currentCategory] || 'QUESTS';
 
   const tabSwitcher = document.getElementById('tab-switcher');
-  tabSwitcher.style.display = currentCategory === 'quests' ? '' : 'none';
+  if (currentCategory === 'quests') {
+    tabSwitcher.style.display = '';
+    const btns = tabSwitcher.querySelectorAll('.runic-radio__option');
+    btns[0].querySelector('.runic-radio__label').textContent = 'Pinned';
+    btns[1].querySelector('.runic-radio__label').textContent = 'All';
+  } else if (currentCategory === 'farm') {
+    tabSwitcher.style.display = '';
+    const btns = tabSwitcher.querySelectorAll('.runic-radio__option');
+    btns[0].querySelector('.runic-radio__label').textContent = 'By Zone';
+    btns[1].querySelector('.runic-radio__label').textContent = 'By Item';
+    // Reset active state based on farmViewMode
+    btns.forEach(b => { b.classList.remove('runic-radio__option--active'); b.setAttribute('aria-checked', 'false'); });
+    const activeIdx = farmViewMode === 'by-zone' ? 0 : 1;
+    btns[activeIdx].classList.add('runic-radio__option--active');
+    btns[activeIdx].setAttribute('aria-checked', 'true');
+    const slider = document.getElementById('tab-slider');
+    if (slider) slider.style.left = activeIdx === 0 ? '0%' : '50%';
+  } else {
+    tabSwitcher.style.display = 'none';
+  }
 
   if (currentCategory !== 'items') {
     const overlay = document.getElementById('filter-overlay');
@@ -114,7 +158,11 @@ function initTabs() {
       btn.setAttribute('aria-checked', 'true');
 
       slider.style.transform = `translateX(${index * 100}%)`;
-      currentTab = btn.dataset.tab;
+      if (currentCategory === 'farm') {
+        farmViewMode = index === 0 ? 'by-zone' : 'by-item';
+      } else {
+        currentTab = btn.dataset.tab;
+      }
       lastDataStr = '';
       refreshQuests();
     });
@@ -320,6 +368,7 @@ function renderGuide(list, status) {
     const filtered = cat.items.filter(item => {
       if (!searchTerm) return true;
       if (item.type === 'quest') return item.quest_name.toLowerCase().includes(searchTerm) || (item.note && item.note.toLowerCase().includes(searchTerm));
+      if (item.type === 'farm') return (item.item_name || '').toLowerCase().includes(searchTerm);
       return item.text && item.text.toLowerCase().includes(searchTerm);
     });
 
@@ -390,6 +439,34 @@ function renderGuideItem(item, catIndex, itemIndex) {
           const icon = getObjectiveIcon(obj.label);
           html += `<div class="quest-objective"><span class="quest-objective__icon">${icon}</span><span class="quest-objective__text">${obj.label}</span></div>`;
         }
+      }
+      if (item.note && item.note !== '<p></p>') {
+        html += `<div class="guide-item__note-rich">${item.note}</div>`;
+      }
+      html += `</div>`;
+    }
+  } else if (item.type === 'farm') {
+    // Farm item card
+    html += `<div class="guide-item__header">`;
+    html += `<div class="guide-item__header-text">`;
+    html += `<div class="quest-step__questline">\uD83D\uDDFA\uFE0F Farm</div>`;
+    html += `<div class="quest-step__name">${item.item_name || 'Farm Item'}</div>`;
+    html += `</div>`;
+    html += `<label class="guide-item__check"><input type="checkbox" ${item.done ? 'checked' : ''} data-toggle-done="${catIndex},${itemIndex}"><span class="guide-item__checkbox"></span></label>`;
+    html += `</div>`;
+
+    if (!item.done) {
+      html += `<div class="guide-item__body">`;
+      if (item.zones && item.zones.length > 0) {
+        html += `<div class="guide-item__farm-zones">`;
+        for (const zc of item.zones.slice(0, 6)) {
+          html += `<span class="farm-zone-badge">${zc}</span>`;
+        }
+        if (item.zones.length > 6) html += `<span class="farm-zone-badge">+${item.zones.length - 6}</span>`;
+        html += `</div>`;
+      }
+      if (item.source_name) {
+        html += `<div class="quest-step__desc">${item.source_name}</div>`;
       }
       if (item.note && item.note !== '<p></p>') {
         html += `<div class="guide-item__note-rich">${item.note}</div>`;
@@ -1021,6 +1098,184 @@ async function renderItems(list, status) {
   list.scrollTop = scrollTop;
 }
 
+// ─── Farm rendering ───
+
+let farmViewMode = 'by-zone'; // 'by-zone' | 'by-item'
+let farmData = null;
+
+async function renderFarm(list, status) {
+  const apiData = await window.pywebview.api.get_farm_data(searchTerm);
+  const items = apiData.items || [];
+  const zoneNames = apiData.zone_names || {};
+  const total = apiData.total || 0;
+
+  const dataStr = JSON.stringify(items) + searchTerm + farmViewMode;
+  if (dataStr === lastDataStr) return;
+  lastDataStr = dataStr;
+  farmData = apiData;
+
+  const scrollTop = list.scrollTop;
+  list.innerHTML = '';
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="quest-list__empty"><span class="runic-header__rune">${RUNE}</span><span>${searchTerm ? 'No matching farm items' : 'Loading farm data...'}</span><span class="runic-header__rune">${RUNE}</span></div>`;
+    return;
+  }
+
+  status.textContent = `${items.length}/${total} farm items`;
+
+  if (farmViewMode === 'by-zone') {
+    renderFarmByZone(list, items, zoneNames);
+  } else {
+    renderFarmByItem(list, items, zoneNames);
+  }
+  list.scrollTop = scrollTop;
+}
+
+function renderFarmByZone(list, items, zoneNames) {
+  // Group items by zone
+  const zoneMap = {};
+  const sourcedItems = []; // items with non-zone sources
+
+  for (const item of items) {
+    for (const zc of (item.zones || [])) {
+      if (!zoneMap[zc]) zoneMap[zc] = [];
+      zoneMap[zc].push(item);
+    }
+    if (item.sources && item.sources.length > 0 && (!item.zones || item.zones.length === 0)) {
+      sourcedItems.push(item);
+    }
+  }
+
+  // Sort zone codes naturally: 1-1, 1-2, ..., 1-BD, 2-1, ...
+  const sortedZones = Object.keys(zoneMap).sort((a, b) => {
+    const pa = a.split('-'), pb = b.split('-');
+    const actA = parseInt(pa[0]) || 99, actB = parseInt(pb[0]) || 99;
+    if (actA !== actB) return actA - actB;
+    const zA = parseInt(pa[1]) || 99, zB = parseInt(pb[1]) || 99;
+    return zA - zB;
+  });
+
+  for (const zc of sortedZones) {
+    const zoneName = zoneNames[zc] || zc;
+    const zoneItems = zoneMap[zc];
+    const group = document.createElement('div');
+    group.className = 'farm-zone-group';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'farm-zone-group__header';
+    const isCode = /^\d/.test(zc);
+    const label = isCode ? `${zc} — ${zoneName}` : zoneName;
+    header.innerHTML = `<span class="farm-zone-group__code">${isCode ? zc : ''}</span><span class="farm-zone-group__name">${isCode ? zoneName : zc}</span><span class="farm-zone-group__count">${zoneItems.length}</span>`;
+    header.addEventListener('click', () => group.classList.toggle('farm-zone-group--collapsed'));
+    group.appendChild(header);
+
+    // Items
+    const itemsEl = document.createElement('div');
+    itemsEl.className = 'farm-zone-group__items';
+    for (const item of zoneItems) {
+      itemsEl.appendChild(createFarmItemCard(item, zoneNames, true));
+    }
+    group.appendChild(itemsEl);
+    list.appendChild(group);
+  }
+
+  // Source-only items (bosses, specials, crafting)
+  if (sourcedItems.length > 0) {
+    const sourceTypes = {};
+    for (const item of sourcedItems) {
+      for (const src of item.sources) {
+        const key = src.name || src.type;
+        if (!sourceTypes[key]) sourceTypes[key] = { type: src.type, items: [] };
+        sourceTypes[key].items.push(item);
+      }
+    }
+
+    for (const [srcName, srcData] of Object.entries(sourceTypes).sort((a, b) => a[0].localeCompare(b[0]))) {
+      const group = document.createElement('div');
+      group.className = 'farm-zone-group farm-zone-group--source';
+      const icon = srcData.type === 'boss' ? '\u2694\uFE0F' : srcData.type === 'special' ? '\u2728' : srcData.type === 'crafting' ? '\uD83D\uDD28' : srcData.type === 'quest' ? '\u2753' : '\uD83C\uDFAF';
+      const header = document.createElement('div');
+      header.className = 'farm-zone-group__header';
+      header.innerHTML = `<span class="farm-zone-group__code">${icon}</span><span class="farm-zone-group__name">${srcName}</span><span class="farm-zone-group__count">${srcData.items.length}</span>`;
+      header.addEventListener('click', () => group.classList.toggle('farm-zone-group--collapsed'));
+      group.appendChild(header);
+
+      const itemsEl = document.createElement('div');
+      itemsEl.className = 'farm-zone-group__items';
+      for (const item of srcData.items) {
+        itemsEl.appendChild(createFarmItemCard(item, zoneNames, true));
+      }
+      group.appendChild(itemsEl);
+      list.appendChild(group);
+    }
+  }
+}
+
+function renderFarmByItem(list, items, zoneNames) {
+  for (const item of items) {
+    list.appendChild(createFarmItemCard(item, zoneNames, false));
+  }
+}
+
+function createFarmItemCard(item, zoneNames, compact) {
+  const card = document.createElement('div');
+  card.className = compact ? 'farm-item farm-item--compact' : 'farm-item';
+
+  const rarityColor = RARITY_COLORS[item.rarity] || RARITY_COLORS['None'];
+  const rarityRgb = hexToRgb(rarityColor);
+  card.style.setProperty('--item-rarity-color', rarityColor);
+  card.style.setProperty('--rarity-rgb', rarityRgb);
+
+  let nameHtml = `<span class="farm-item__name">${item.name}</span>`;
+  if (item.level) nameHtml += `<span class="farm-item__level">Lv.${item.level}</span>`;
+
+  let metaHtml = '';
+  if (item.rarity) {
+    metaHtml += `<span class="farm-item__tag farm-item__tag--rarity" style="--rarity-rgb:${rarityRgb}">${item.rarity}</span>`;
+  }
+  if (item.type) {
+    metaHtml += `<span class="farm-item__tag farm-item__tag--type">${item.type}</span>`;
+  }
+  if (item.tier) {
+    metaHtml += `<span class="farm-item__tag farm-item__tag--tier">${item.tier}</span>`;
+  }
+
+  // Show zones (only in by-item mode)
+  let zonesHtml = '';
+  if (!compact && item.zones && item.zones.length > 0) {
+    zonesHtml = '<div class="farm-item__zones">';
+    for (const zc of item.zones) {
+      const name = zoneNames[zc] || zc;
+      const isCode = /^\d/.test(zc);
+      const label = isCode ? zc : name;
+      zonesHtml += `<span class="farm-zone-badge" title="${name}">${label}</span>`;
+    }
+    zonesHtml += '</div>';
+  }
+
+  // Show sources
+  let sourcesHtml = '';
+  if (!compact && item.sources && item.sources.length > 0) {
+    sourcesHtml = '<div class="farm-item__sources">';
+    for (const src of item.sources) {
+      const icon = src.type === 'boss' ? '\u2694\uFE0F' : src.type === 'special' ? '\u2728' : src.type === 'crafting' ? '\uD83D\uDD28' : src.type === 'quest' ? '\u2753' : '\uD83C\uDFAF';
+      sourcesHtml += `<span class="farm-source-badge farm-source-badge--${src.type}" title="${src.name}">${icon} ${src.name}</span>`;
+    }
+    sourcesHtml += '</div>';
+  }
+
+  card.innerHTML = `
+    <div class="farm-item__header">
+      ${nameHtml}
+    </div>
+    <div class="farm-item__meta">${metaHtml}</div>
+    ${zonesHtml}${sourcesHtml}
+  `;
+  return card;
+}
+
 // ─── Stats rendering ───
 
 let pinnedStats = [];
@@ -1036,6 +1291,7 @@ const STAT_LABELS = {
   xp: { icon: '\u2B50', name: 'XP', desc: 'Experience earned & per hour' },
   items: { icon: '\uD83C\uDFF9', name: 'Items', desc: 'Item drops by rarity' },
   satanic_zone: { icon: '\uD83D\uDD25', name: 'Satanic Zone', desc: 'Current zone & buffs' },
+  farm_zone_items: { icon: '\uD83D\uDDFA\uFE0F', name: 'Zone Drops', desc: 'Items droppables dans la zone courante' },
 };
 
 function getBuffIcon(name) {
@@ -1102,6 +1358,24 @@ function renderStatCard(key, data, isPinned) {
       const d = data[r];
       if (d) content += `<div class="stat-card__row"><span class="stat-card__label" style="color:${RARITY_COLORS[r] || '#c8c8c8'}">${r}</span><span class="stat-card__value">${d.total}${d.mf ? ` <span class="stat-card__mf">(${d.mf} MF)</span>` : ''}</span></div>`;
     }
+  } else if (key === 'farm_zone_items') {
+    // Show current zone drops preview
+    content = `<div class="stat-card__value stat-card__value--dim">Items droppable in current zone</div>`;
+    // Try to show actual zone data if available
+    if (data && data.zone_name) {
+      content = `<div class="stat-card__zone">${data.zone_name}${data.zone_code ? ` (${data.zone_code})` : ''}</div>`;
+      if (data.items && data.items.length > 0) {
+        for (const item of data.items.slice(0, 5)) {
+          const rc = RARITY_COLORS[item.rarity] || '#888';
+          content += `<div class="stat-card__row"><span class="stat-card__label" style="color:${rc}">${item.name}</span><span class="stat-card__value">${item.type || ''}</span></div>`;
+        }
+        if (data.items.length > 5) {
+          content += `<div class="stat-card__value stat-card__value--dim">+${data.items.length - 5} more</div>`;
+        }
+      } else {
+        content += `<div class="stat-card__value stat-card__value--dim">No items in this zone</div>`;
+      }
+    }
   } else if (key === 'satanic_zone') {
     if (data && data.zone) {
       content = `<div class="stat-card__zone">${data.zone}</div>`;
@@ -1163,9 +1437,16 @@ async function renderStats(list, status) {
   html += `</div>`;
 
   // Stat cards
-  const keys = ['character', 'session', 'gold', 'xp', 'items', 'satanic_zone'];
+  // Fetch farm zone data for the stat card preview
+  let farmZoneData = null;
+  if (statsData && statsData.current_zone && statsData.current_zone.code) {
+    try { farmZoneData = await window.pywebview.api.get_farm_items_for_zone(statsData.current_zone.code); } catch (e) {}
+  }
+
+  const keys = ['character', 'session', 'gold', 'xp', 'items', 'satanic_zone', 'farm_zone_items'];
   for (const key of keys) {
-    const data = statsData ? statsData[key] : null;
+    let data = statsData ? statsData[key] : null;
+    if (key === 'farm_zone_items') data = farmZoneData;
     html += renderStatCard(key, data, pinnedStats.includes(key));
   }
 
@@ -1228,6 +1509,25 @@ function renderPillStatsHTML(data) {
       continue;
     }
 
+    if (key === 'farm_zone_items') {
+      if (!val || !val.items || val.items.length === 0) {
+        html += `<div class="pill-farm"><span class="pill-farm__zone pill-farm__zone--dim">${RUNE} Zone Drops</span><span class="pill-farm__empty">No zone detected</span></div>`;
+        continue;
+      }
+      html += `<div class="pill-farm">`;
+      html += `<div class="pill-farm__zone" data-farm-zone-code="${val.zone_code || ''}">${RUNE} ${val.zone_name}${val.zone_code ? ` (${val.zone_code})` : ''}</div>`;
+      html += `<div class="pill-farm__list">`;
+      for (const item of val.items) {
+        const rc = RARITY_COLORS[item.rarity] || '#888';
+        html += `<div class="pill-farm__item" data-item-name="${item.name}">`;
+        html += `<span class="pill-farm__name" style="color:${rc}">${item.name}</span>`;
+        if (item.type) html += `<span class="pill-farm__type">${item.type}</span>`;
+        html += `</div>`;
+      }
+      html += `</div></div>`;
+      continue;
+    }
+
     if (!val) continue;
     // Compact stat line
     let display = '';
@@ -1278,6 +1578,8 @@ async function updatePillStats() {
         if (!meta) continue;
         if (key === 'satanic_zone') {
           placeholderHtml += `<div class="pill-sz pill-sz--waiting"><span class="pill-sz__zone pill-sz__zone--dim">${RUNE} Satanic Zone</span><span class="pill-sz__waiting-text">Waiting for server update...</span><span class="pill-sz__hint"><span class="pill-sz__hint-icon">\u21BB</span>Vote reset or create a new game to force refresh</span></div>`;
+        } else if (key === 'farm_zone_items') {
+          placeholderHtml += `<div class="pill-farm"><span class="pill-farm__zone pill-farm__zone--dim">${RUNE} Zone Drops</span><span class="pill-farm__empty">No zone detected</span></div>`;
         } else {
           placeholderHtml += `<div class="pill-stat"><span class="pill-stat__icon">${meta.icon}</span><span class="pill-stat__label">${meta.name}</span><span class="pill-stat__value pill-stat__value--dim">-</span></div>`;
         }
@@ -1300,8 +1602,8 @@ async function updatePillStats() {
 
       // Resize pill to fit actual rendered content
       requestAnimationFrame(() => {
-        const h = pillContent.scrollHeight + 4;  // +4 for border
-        const w = Math.min(pillContent.scrollWidth + 22, PILL_MAX_W);   // +22 for padding+border
+        const h = pillContent.scrollHeight + 4;
+        const w = Math.min(pillContent.scrollWidth + 22, PILL_MAX_W);
         window.pywebview.api.resize_pill(Math.max(w, 270), Math.max(h, 30));
       });
     }
@@ -1325,6 +1627,7 @@ async function refreshQuests() {
     if (currentCategory === 'runewords') { await renderRunewords(list, status)(); return; }
     if (currentCategory === 'runes') { await renderRunes(list, status)(); return; }
     if (currentCategory === 'items') { await renderItems(list, status); return; }
+    if (currentCategory === 'farm') { await renderFarm(list, status); return; }
     if (currentCategory === 'stats') { await renderStats(list, status); return; }
 
     // Load web quest data if not yet available (needed for both tabs)
@@ -1680,6 +1983,8 @@ async function collapseToPill() {
 function expandFromPill() {
   if (!isCollapsed) return;
   isCollapsed = false;
+  // Hide tooltip if open
+  hidePillFarmTooltip();
   // Reset pill view state
   document.getElementById('pill-view').style.display = 'none';
   const pillIcon = document.getElementById('pill-logo');
@@ -1769,6 +2074,102 @@ function initPillMode() {
   });
 }
 
+// ─── Pill farm tooltip (separate window via backend) ───
+
+let _pillTooltipActive = null;
+let _pillTooltipLock = false;
+let _pillItemCache = {};
+
+function initPillFarmTooltip() {
+  const pillView = document.getElementById('pill-view');
+  if (!pillView) return;
+
+  pillView.addEventListener('mouseover', (e) => {
+    const farmItem = e.target.closest('.pill-farm__item');
+    if (farmItem) {
+      const name = farmItem.dataset.itemName;
+      if (name && name !== _pillTooltipActive) {
+        showPillFarmTooltip(name);
+      }
+    }
+  });
+
+  pillView.addEventListener('mouseout', (e) => {
+    if (!_pillTooltipActive) return;
+    const related = e.relatedTarget;
+    if (related && related.closest('.pill-farm__item')) return;
+    hidePillFarmTooltip();
+  });
+
+  // Click item → expand pill, open Items view with search
+  // Click zone header → expand pill, open Farm view
+  pillView.addEventListener('mousedown', (e) => {
+    const farmItem = e.target.closest('.pill-farm__item');
+    const zoneHeader = e.target.closest('.pill-farm__zone');
+    if (farmItem || (zoneHeader && !zoneHeader.classList.contains('pill-farm__zone--dim'))) {
+      e.stopPropagation(); // prevent pill drag/expand handler
+      _pillFarmClickTarget = farmItem || zoneHeader;
+    }
+  }, true);
+
+  pillView.addEventListener('mouseup', (e) => {
+    if (!_pillFarmClickTarget) return;
+    const target = _pillFarmClickTarget;
+    _pillFarmClickTarget = null;
+    e.stopPropagation(); // prevent pill expand handler
+
+    hidePillFarmTooltip();
+
+    if (target.classList.contains('pill-farm__item')) {
+      const name = target.dataset.itemName;
+      if (name) {
+        expandFromPill();
+        setTimeout(() => { navigateToCategory('items', name); }, 350);
+      }
+    } else if (target.classList.contains('pill-farm__zone')) {
+      expandFromPill();
+      setTimeout(() => { navigateToCategory('farm'); }, 350);
+    }
+  }, true);
+}
+let _pillFarmClickTarget = null;
+
+async function showPillFarmTooltip(itemName) {
+  if (_pillTooltipLock) return;
+  _pillTooltipLock = true;
+  _pillTooltipActive = itemName;
+
+  try {
+    let cached = _pillItemCache[itemName];
+    if (!cached) {
+      const apiData = await window.pywebview.api.get_items(itemName, null, null, 0, null, null, 'level', 'desc');
+      const match = (apiData.items || []).find(i => i.name === itemName);
+      if (!match) { _pillTooltipLock = false; return; }
+      const filterOpts = await window.pywebview.api.get_item_filters();
+      cached = { item: match, statDefs: (filterOpts && filterOpts.stat_defs) || [] };
+      _pillItemCache[itemName] = cached;
+    }
+
+    if (_pillTooltipActive !== itemName) { _pillTooltipLock = false; return; }
+
+    // Build card HTML string
+    const card = createItemCard(cached.item, cached.statDefs);
+    const tmp = document.createElement('div');
+    tmp.appendChild(card);
+
+    // Send to backend — it handles the separate tooltip window
+    await window.pywebview.api.show_pill_tooltip(tmp.innerHTML);
+  } catch (e) {
+    console.warn('Pill tooltip error:', e);
+  }
+  _pillTooltipLock = false;
+}
+
+async function hidePillFarmTooltip() {
+  _pillTooltipActive = null;
+  try { await window.pywebview.api.hide_pill_tooltip(); } catch (e) {}
+}
+
 // ─── Clipboard fix for pywebview frameless ───
 
 document.addEventListener('keydown', (e) => {
@@ -1789,6 +2190,7 @@ initSearch();
 initWindowControls();
 initSettings();
 initPillMode();
+initPillFarmTooltip();
 setInterval(refreshQuests, 1000);
 setInterval(updateWebStatus, 3000);
 setInterval(updatePillStats, 500);

@@ -6,10 +6,12 @@
 
 let presetsData = { active_preset_id: null, presets: [] };
 let webQuestData = null;
+let webFarmData = null;
 let searchTerm = '';
 let activeEditors = [];
 let sortableInstances = [];
 let focusCatIndex = 0; // which category receives new items
+let activeBrowser = 'quests'; // 'quests' | 'farm'
 
 // ─── Utility functions (duplicated from app.js for independence) ───
 
@@ -215,7 +217,11 @@ async function saveAndRender() {
 
 function renderAll() {
   renderTopbar();
-  renderQuestBrowser();
+  if (activeBrowser === 'farm') {
+    renderFarmBrowser();
+  } else {
+    renderQuestBrowser();
+  }
   renderPresetTree();
 }
 
@@ -443,6 +449,164 @@ function addQuestlineToPreset(questlineName) {
   if (added > 0) saveAndRender();
 }
 
+// ─── Farm browser (left panel) ───
+
+function isFarmItemInPreset(preset, itemName) {
+  if (!preset) return false;
+  for (const cat of preset.categories) {
+    for (const item of cat.items) {
+      if (item.type === 'farm' && item.item_name === itemName) return true;
+    }
+  }
+  return false;
+}
+
+function renderFarmBrowser() {
+  const list = document.getElementById('ed-quest-list');
+  if (!webFarmData || !webFarmData.items || webFarmData.items.length === 0) {
+    list.innerHTML = `<div class="editor-preset-tree__empty"><span>\u25C6</span><span>Loading farm database...</span></div>`;
+    return;
+  }
+
+  const preset = getActivePreset();
+  const term = searchTerm.toLowerCase();
+  const zoneNames = webFarmData.zone_names || {};
+
+  // Group items by first zone or source
+  const zoneMap = {};
+  const sourceItems = [];
+  for (const item of webFarmData.items) {
+    if (term && !item.name.toLowerCase().includes(term)) continue;
+    if (item.zones && item.zones.length > 0) {
+      // Put in first zone's group
+      const firstZone = item.zones[0];
+      if (!zoneMap[firstZone]) zoneMap[firstZone] = [];
+      zoneMap[firstZone].push(item);
+    } else if (item.sources && item.sources.length > 0) {
+      sourceItems.push(item);
+    }
+  }
+
+  let html = '';
+
+  // Zone groups
+  const sortedZones = Object.keys(zoneMap).sort((a, b) => {
+    const pa = a.split('-'), pb = b.split('-');
+    const actA = parseInt(pa[0]) || 99, actB = parseInt(pb[0]) || 99;
+    if (actA !== actB) return actA - actB;
+    return (parseInt(pa[1]) || 99) - (parseInt(pb[1]) || 99);
+  });
+
+  for (const zc of sortedZones) {
+    const zoneName = zoneNames[zc] || zc;
+    const items = zoneMap[zc];
+    const isCode = /^\d/.test(zc);
+    const label = isCode ? `${zc} - ${zoneName}` : zc;
+
+    html += `<div class="editor-ql${term ? ' editor-ql--expanded' : ''}" data-farm-zone="${zc}">`;
+    html += `<div class="editor-ql__header" data-ql-toggle>`;
+    html += `<span class="editor-ql__arrow">\u25B6</span>`;
+    html += `<span class="editor-ql__name">${label}</span>`;
+    html += `<span class="editor-ql__count">${items.length}</span>`;
+    html += `</div>`;
+    html += `<div class="editor-ql__body">`;
+
+    for (const item of items) {
+      const added = preset && isFarmItemInPreset(preset, item.name);
+      html += `<div class="editor-ql__quest${added ? ' editor-ql__quest--added' : ''}">`;
+      html += `<span class="editor-ql__quest-name">${item.name}</span>`;
+      if (item.rarity) {
+        html += `<span class="editor-ql__quest-tag" style="color:${item.rarity === 'Satanic' ? '#e93636' : item.rarity === 'Heroic' ? '#029999' : '#888'}">${item.rarity}</span>`;
+      }
+      if (added) {
+        html += `<span class="editor-ql__quest-tag">added</span>`;
+      } else {
+        html += `<button class="editor-ql__quest-add" data-farm-add data-farm-name="${item.name}">`;
+        html += `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>`;
+        html += `</button>`;
+      }
+      html += `</div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  // Source-only items
+  if (sourceItems.length > 0) {
+    html += `<div class="editor-ql${term ? ' editor-ql--expanded' : ''}" data-farm-zone="sources">`;
+    html += `<div class="editor-ql__header" data-ql-toggle>`;
+    html += `<span class="editor-ql__arrow">\u25B6</span>`;
+    html += `<span class="editor-ql__name">Bosses & Special</span>`;
+    html += `<span class="editor-ql__count">${sourceItems.length}</span>`;
+    html += `</div>`;
+    html += `<div class="editor-ql__body">`;
+    for (const item of sourceItems) {
+      const added = preset && isFarmItemInPreset(preset, item.name);
+      const srcName = item.sources[0]?.name || '';
+      html += `<div class="editor-ql__quest${added ? ' editor-ql__quest--added' : ''}">`;
+      html += `<span class="editor-ql__quest-name">${item.name}</span>`;
+      if (srcName) html += `<span class="editor-ql__quest-tag">${srcName}</span>`;
+      if (added) {
+        html += `<span class="editor-ql__quest-tag">added</span>`;
+      } else {
+        html += `<button class="editor-ql__quest-add" data-farm-add data-farm-name="${item.name}">`;
+        html += `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>`;
+        html += `</button>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  if (!html) {
+    html = `<div class="editor-preset-tree__empty"><span>\u25C6</span><span>No farm items found</span></div>`;
+  }
+
+  list.innerHTML = html;
+  initFarmBrowserListeners();
+}
+
+function initFarmBrowserListeners() {
+  // Toggle zone expand/collapse (reuse same data-ql-toggle pattern)
+  document.querySelectorAll('#ed-quest-list [data-ql-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      header.closest('.editor-ql').classList.toggle('editor-ql--expanded');
+    });
+  });
+
+  // Add farm item
+  document.querySelectorAll('#ed-quest-list [data-farm-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      addFarmItemToPreset(btn.dataset.farmName);
+    });
+  });
+}
+
+function addFarmItemToPreset(itemName) {
+  const preset = getActivePreset();
+  if (!preset) return;
+  if (isFarmItemInPreset(preset, itemName)) return;
+
+  // Find the farm item data
+  const farmItem = (webFarmData?.items || []).find(i => i.name === itemName);
+  if (!farmItem) return;
+
+  const cat = preset.categories[focusCatIndex] || preset.categories[preset.categories.length - 1];
+  if (!cat) return;
+
+  cat.items.push({
+    id: genId(),
+    type: 'farm',
+    item_name: itemName,
+    zones: farmItem.zones || [],
+    source_type: farmItem.sources?.[0]?.type || 'zone',
+    source_name: farmItem.sources?.[0]?.name || null,
+    note: '',
+    done: false,
+  });
+  saveAndRender();
+}
+
 // ═══════════════════════════════════════════
 // RIGHT PANEL — Preset Structure Tree
 // ═══════════════════════════════════════════
@@ -551,6 +715,36 @@ function renderEditorItem(item, catIdx, itemIdx) {
       html += `<div class="editor-item__note">${item.note}</div>`;
     }
 
+    html += `</div>`;
+  } else if (item.type === 'farm') {
+    html += `<div class="editor-item__body">`;
+    html += `<div class="editor-item__header-row">`;
+    html += `<span class="editor-item__icon editor-item__icon--farm">\uD83D\uDDFA\uFE0F</span>`;
+    html += `<div class="editor-item__title">${item.item_name || 'Farm Item'}</div>`;
+    html += `<div class="editor-item__actions">`;
+    html += `<button class="editor-item__btn" data-item-edit="${catIdx}-${itemIdx}" title="Edit note">`;
+    html += `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>`;
+    html += `</button>`;
+    html += `<button class="editor-item__btn editor-item__btn--danger" data-item-delete="${catIdx}-${itemIdx}" title="Remove">`;
+    html += `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>`;
+    html += `</button>`;
+    html += `</div>`;
+    html += `</div>`;
+    // Show zones
+    if (item.zones && item.zones.length > 0) {
+      html += `<div class="editor-item__locs">`;
+      for (const zc of item.zones.slice(0, 8)) {
+        html += `<span class="editor-item__loc farm-zone-badge">${zc}</span>`;
+      }
+      if (item.zones.length > 8) html += `<span class="editor-item__loc">+${item.zones.length - 8}</span>`;
+      html += `</div>`;
+    }
+    if (item.source_name) {
+      html += `<div class="editor-item__subtitle">${item.source_name}</div>`;
+    }
+    if (item.note && item.note !== '<p></p>') {
+      html += `<div class="editor-item__note">${item.note}</div>`;
+    }
     html += `</div>`;
   } else {
     html += `<div class="editor-item__body">`;
@@ -941,7 +1135,11 @@ function initSearch() {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
       searchTerm = input.value.trim();
-      renderQuestBrowser();
+      if (activeBrowser === 'farm') {
+        renderFarmBrowser();
+      } else {
+        renderQuestBrowser();
+      }
     }, 200);
   });
 }
@@ -996,6 +1194,34 @@ function initKeyboard() {
   });
 }
 
+// ─── Browser tab switching ───
+
+function initBrowserTabs() {
+  const tabs = document.querySelectorAll('.editor-panel__tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', async () => {
+      tabs.forEach(t => t.classList.remove('editor-panel__tab--active'));
+      tab.classList.add('editor-panel__tab--active');
+      activeBrowser = tab.dataset.browser;
+
+      const searchInput = document.getElementById('ed-search');
+      if (activeBrowser === 'farm') {
+        searchInput.placeholder = 'Search farm items...';
+        // Lazy-load farm data
+        if (!webFarmData) {
+          try {
+            webFarmData = await window.pywebview.api.get_farm_data('');
+          } catch (e) {}
+        }
+        renderFarmBrowser();
+      } else {
+        searchInput.placeholder = 'Search quests...';
+        renderQuestBrowser();
+      }
+    });
+  });
+}
+
 // ═══════════════════════════════════════════
 // INIT — pywebviewready
 // ═══════════════════════════════════════════
@@ -1017,6 +1243,7 @@ window.addEventListener('pywebviewready', async () => {
   initAddCategory();
   initAddFreeNote();
   initKeyboard();
+  initBrowserTabs();
 
   renderAll();
 

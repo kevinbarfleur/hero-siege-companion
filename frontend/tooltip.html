@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Item Tooltip</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0a0a0c;
+      overflow: hidden;
+    }
+    #tooltip-content {
+      padding: 0;
+    }
+    #tooltip-content .item-card {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="tooltip-content"></div>
+  <script>
+    function updateContent(html) {
+      const container = document.getElementById('tooltip-content');
+      container.innerHTML = html;
+      // Resize window to fit content
+      requestAnimationFrame(() => {
+        const w = Math.max(container.scrollWidth, 340);
+        const h = container.scrollHeight;
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.resize_pill_tooltip(w, h);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

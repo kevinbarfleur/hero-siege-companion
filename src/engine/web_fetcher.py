@@ -1,8 +1,8 @@
 """
 Fetch and parse data from hero-siege-helper.vercel.app.
-Supports: quests, runewords, runes, items.
+Supports: quests, runewords, runes, items, farm (zone drop locations).
 Uses simple HTTP GET + BeautifulSoup (no headless browser needed).
-Items are parsed from JS bundles (data embedded in client-side code).
+Items and farm data are parsed from JS bundles (data embedded in client-side code).
 """
 import re
 import json
@@ -546,3 +546,265 @@ def fetch_items() -> dict | None:
         return None
 
     return {"items": items, "stat_defs": stat_defs}
+
+
+# ─── Farm (zone drop locations, parsed from JS bundle) ───
+
+def _find_farm_data_chunk() -> str | None:
+    """Find and fetch the JS chunk containing farm zone→items mapping."""
+    logger = logging.getLogger(LOGGING_NAME)
+    try:
+        resp = requests.get(f"{BASE_URL}/farm", timeout=TIMEOUT)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"Failed to fetch /farm page: {e}")
+        return None
+
+    js_urls = set(re.findall(r'/_next/static/chunks/[^"]+\.js', resp.text))
+    dpl = re.search(r'dpl=([^"&]+)', resp.text)
+    dpl_param = f"?dpl={dpl.group(1)}" if dpl else ""
+
+    for url in js_urls:
+        try:
+            r = requests.get(f"{BASE_URL}{url}{dpl_param}", timeout=TIMEOUT)
+            # Farm chunk has JSON.parse('{"Rat Den":["..."],...}')
+            if "JSON.parse('" in r.text and '"Rat Den":["' in r.text:
+                logger.info(f"Found farm data chunk: {url} ({len(r.text)} bytes)")
+                return r.text
+        except Exception:
+            continue
+    return None
+
+
+def _find_zone_data_chunk() -> str | None:
+    """Find and fetch the JS chunk containing zone name→code mapping."""
+    logger = logging.getLogger(LOGGING_NAME)
+    try:
+        resp = requests.get(f"{BASE_URL}/farm", timeout=TIMEOUT)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"Failed to fetch /farm page: {e}")
+        return None
+
+    js_urls = set(re.findall(r'/_next/static/chunks/[^"]+\.js', resp.text))
+    dpl = re.search(r'dpl=([^"&]+)', resp.text)
+    dpl_param = f"?dpl={dpl.group(1)}" if dpl else ""
+
+    for url in js_urls:
+        try:
+            r = requests.get(f"{BASE_URL}{url}{dpl_param}", timeout=TIMEOUT)
+            if 'zone:"3-1",name:"Corrupted Oasis"' in r.text:
+                logger.info(f"Found zone data chunk: {url} ({len(r.text)} bytes)")
+                return r.text
+        except Exception:
+            continue
+    return None
+
+
+def _parse_farm_json(content: str) -> dict | None:
+    """Extract the zone→items JSON from the farm JS chunk.
+
+    The data lives inside a JSON.parse('...') call with the structure:
+    {"Zone Name": ["Item1", "Item2", ...], ...}
+    """
+    marker = '"Rat Den"'
+    idx = content.find(marker)
+    if idx < 0:
+        return None
+
+    # Walk back to find JSON.parse('
+    start = content.rfind("JSON.parse('", max(0, idx - 300), idx)
+    if start < 0:
+        return None
+    json_start = start + len("JSON.parse('")
+
+    # Find the closing ')
+    json_end = content.find("')", json_start)
+    if json_end < 0:
+        return None
+
+    raw = content[json_start:json_end]
+    # Fix JS string escaping: \' (backslash + single quote) → just single quote
+    fixed = raw.replace(chr(92) + chr(39), chr(39))
+
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        return None
+
+
+def _parse_zone_codes(content: str) -> dict:
+    """Extract zone name→code mapping from the zones JS chunk.
+
+    Parses zone:"X-Y" then finds the nearest name:"..." in a 300-char window.
+    Handles varying field order (zone,name vs zone,roomUrls,...,name).
+    """
+    zones = {}
+    for m in re.finditer(r'zone:"(\d+-\d+(?:-\d+)?)"', content):
+        code = m.group(1)
+        window = content[m.start():min(len(content), m.start() + 300)]
+        nm = re.search(r'name:"([^"]+)"', window)
+        if nm:
+            zones[nm.group(1)] = code
+    return zones
+
+
+_ZONE_CODE_RE = re.compile(r'^\d+-(?:\d+|BD|D)$')
+
+# Boss names (drop from specific bosses, not regular zones)
+_BOSS_NAMES = {
+    'Uber Damien', 'Uber Reaper', 'Uber Gabriel',
+    'Sung Lee', 'Architect of Ruin', 'Possessed Luna',
+    'Amun Ra', 'Endrixia', 'Grimbone', 'The Sheep King',
+    'Gabriel', 'King Rakhul', 'Mevius',
+}
+
+# Special area names (not regular act zones)
+_SPECIAL_AREAS = {
+    'Sheeponia', 'Unstable Rift', 'Colossal Chest', 'Ruby Chest',
+    'Eternal Battlefield', 'Chaos Tower', 'Rogue Chaos Tower',
+    'Gamba Machine', 'Generic Chest', 'Wormhole',
+    'Chaos Pillar', 'Shadow Realm', 'Bifrost',
+    'Challenge Dungeon', 'Circle of Hatred', 'Mimic',
+    'Curacan Hollow',
+}
+
+
+def _classify_farm_key(key: str, zone_codes: dict) -> tuple:
+    """Classify a farm data key into (kind, zone_code_or_none).
+
+    Returns:
+        ("zone_code", code)     — key IS a zone code like "1-1", "3-BD"
+        ("zone_name", code)     — key is a zone name that maps to a code
+        ("dungeon", None)       — dungeon/sub-zone name (Rat Den, etc.)
+        ("boss", None)          — boss-specific drop
+        ("rare_boss", None)     — 1:100 boss drop
+        ("special", None)       — special areas
+        ("crafting", None)      — crafted items
+        ("quest", None)         — quest rewards
+    """
+    k = key.strip()
+
+    # Direct zone code: "1-1", "3-BD", "2-D"
+    if _ZONE_CODE_RE.match(k):
+        return ("zone_code", k)
+
+    # Known zone name → zone code
+    if k in zone_codes:
+        return ("zone_name", zone_codes[k])
+
+    # 1:100 boss patterns
+    if re.match(r'1:\d+ ', k):
+        return ("rare_boss", None)
+
+    # Bosses
+    if k in _BOSS_NAMES or k == 'HP':
+        return ("boss", None)
+
+    # Crafting
+    if 'Crafting' in k or 'Tarot' in k:
+        return ("crafting", None)
+
+    # Quest
+    if k == 'Quest':
+        return ("quest", None)
+
+    # Special areas
+    if k in _SPECIAL_AREAS:
+        return ("special", None)
+
+    # Dungeon or unknown sub-zone (Rat Den, Northern Post, Chilling Cavern, etc.)
+    return ("dungeon", None)
+
+
+def _invert_farm_data(zone_to_items: dict, zone_codes: dict) -> tuple:
+    """Convert zone→items dict to item-centric list + zone_names lookup.
+
+    Returns (items_list, zone_names_dict):
+        items_list: [{"name": str, "zones": [code], "sources": [{"type":..., "name":...}]}, ...]
+        zone_names_dict: {code: name, ...}
+    """
+    # Build reverse zone_names: code → name
+    zone_names = {v: k for k, v in zone_codes.items()}
+
+    # Accumulate per-item data
+    item_map = {}  # item_name → {"zones": set, "sources": list}
+
+    for farm_key, item_names in zone_to_items.items():
+        kind, code = _classify_farm_key(farm_key, zone_codes)
+
+        for item_name in item_names:
+            if item_name not in item_map:
+                item_map[item_name] = {"zones": set(), "sources": []}
+
+            entry = item_map[item_name]
+
+            if kind in ("zone_code", "zone_name") and code:
+                entry["zones"].add(code)
+                if code not in zone_names:
+                    zone_names[code] = farm_key
+            elif kind == "dungeon":
+                # Dungeons are sub-zones; store as zone with the key as name
+                entry["zones"].add(farm_key)
+                zone_names[farm_key] = farm_key
+            else:
+                # Non-zone source: boss, special, crafting, quest, rare_boss
+                src = {"type": kind, "name": farm_key}
+                if src not in entry["sources"]:
+                    entry["sources"].append(src)
+
+    # Build final items list
+    items = []
+    for name, data in sorted(item_map.items()):
+        item = {"name": name, "zones": sorted(data["zones"])}
+        if data["sources"]:
+            item["sources"] = data["sources"]
+        items.append(item)
+
+    return items, zone_names
+
+
+def fetch_farm() -> dict | None:
+    """
+    Fetch and parse farm zone→item drop location data from hero-siege-helper.
+
+    Returns:
+    {
+        "zone_names": {"1-1": "Outskirts of Inoya", ...},
+        "items": [
+            {
+                "name": "Ancient Aegis",
+                "zones": ["3-1", "3-2", "3-3"],
+                "sources": [{"type": "special", "name": "Colossal Chest"}]  # optional
+            },
+            ...
+        ]
+    }
+    """
+    logger = logging.getLogger(LOGGING_NAME)
+
+    # 1. Get farm zone→items mapping from JS chunk
+    farm_content = _find_farm_data_chunk()
+    if not farm_content:
+        logger.error("Could not find farm data chunk")
+        return None
+
+    zone_to_items = _parse_farm_json(farm_content)
+    if not zone_to_items:
+        logger.error("Failed to parse farm JSON data")
+        return None
+    logger.info(f"Farm raw: {len(zone_to_items)} zone entries")
+
+    # 2. Get zone name→code mapping from zones JS chunk
+    zone_content = _find_zone_data_chunk()
+    zone_codes = _parse_zone_codes(zone_content) if zone_content else {}
+    logger.info(f"Zone codes: {len(zone_codes)} mappings")
+
+    # 3. Convert to item-centric structure
+    items, zone_names = _invert_farm_data(zone_to_items, zone_codes)
+    logger.info(f"Farm parsed: {len(items)} items, {len(zone_names)} zones")
+
+    if not items:
+        return None
+
+    return {"zone_names": zone_names, "items": items}
